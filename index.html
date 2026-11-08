@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Planner Casa 3D</title>
+  <meta name="description" content="Progetta il tuo appartamento in 3D: disegna le stanze, aggiungi porte, finestre e mobili.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fde'/%3E%3Cpath d='M7 16 16 8l9 8v9H19v-6h-6v6H7z' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <button id="menuBtn" class="icon-btn only-mobile" title="Pannello">☰</button>
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M7 16 16 8l9 8v9H19v-6h-6v6H7z" fill="#fff"/></svg>
+      <span>Planner Casa 3D</span>
+    </div>
+    <input id="projectName" class="project-name" aria-label="Nome progetto" spellcheck="false">
+    <div class="spacer"></div>
+    <div class="group">
+      <button id="undoBtn" class="icon-btn" title="Annulla (Ctrl+Z)">↶</button>
+      <button id="redoBtn" class="icon-btn" title="Ripeti (Ctrl+Y)">↷</button>
+    </div>
+    <div class="seg" id="viewSeg">
+      <button data-view="3d" class="on">3D</button>
+      <button data-view="2d">Pianta</button>
+    </div>
+    <select id="wallMode" title="Visualizzazione muri">
+      <option value="auto">Muri: auto</option>
+      <option value="high">Muri: alti</option>
+      <option value="low">Muri: bassi</option>
+    </select>
+    <div class="group hide-narrow">
+      <button id="fitBtn" title="Inquadra tutto">Centra</button>
+      <button id="photoBtn" title="Salva un'immagine PNG">Foto</button>
+      <button id="exportBtn" title="Scarica il progetto (.json)">Esporta</button>
+      <label class="btn" title="Apri un progetto (.json)">Importa<input type="file" id="importInput" accept=".json,application/json" hidden></label>
+    </div>
+  </header>
+
+  <main>
+    <aside id="sidebar">
+      <nav class="tabs">
+        <button data-tab="furniture" class="on">Mobili</button>
+        <button data-tab="rooms">Stanze</button>
+        <button data-tab="list">Elenco</button>
+      </nav>
+      <section id="tab-furniture" class="tab on">
+        <input id="search" type="search" placeholder="Cerca: letto, divano, porta…" autocomplete="off">
+        <div id="catalog"></div>
+      </section>
+      <section id="tab-rooms" class="tab"></section>
+      <section id="tab-list" class="tab"></section>
+    </aside>
+
+    <div id="viewport">
+      <div id="status" class="status" hidden></div>
+      <aside id="props" hidden></aside>
+      <div class="help">
+        <span><b>Trascina</b> un mobile per spostarlo</span>
+        <span><kbd>R</kbd> ruota</span>
+        <span><kbd>Canc</kbd> elimina</span>
+        <span class="hide-narrow"><b>Sinistro</b> gira · <b>Destro</b> sposta · <b>Rotella</b> zoom</span>
+        <span class="rooms-only">Trascina un <b>pavimento</b> per spostare la stanza</span>
+      </div>
+    </div>
+  </main>
+
+  <noscript>Serve JavaScript per usare il planner.</noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
