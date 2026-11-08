@@ -4,7 +4,7 @@
 
 export const DEFAULT_OPTIONS = {
   bedrooms: 2, baths: 1, kitchen: 'separate', studio: false, laundry: false, storage: false,
-  corridor: true, size: 1, wallH: 270, furnish: true,
+  corridor: true, terrace: false, size: 1, wallH: 270, furnish: true,
 };
 
 const NAMES = ['Monolocale', 'Bilocale', 'Trilocale', 'Quadrilocale', 'Pentalocale'];
@@ -74,6 +74,18 @@ export function generateHome(opts) {
   // ---- living (+ open kitchen)
   addRoom(open ? 'Soggiorno con cucina' : 'Soggiorno', 0, 0, livW, D1, 'parquet');
   const zc = D1 / 2;
+  // ---- terrace in front of the living room, reached through a French window
+  if (o.terrace) {
+    const tw = Math.min(livW, S(480)), td = Math.max(S(180), 150);
+    rooms.push({ name: 'Terrazzo', x: 0, z: -td, w: tw, d: td, floor: 'decking', terrace: true });
+    putOpening('balcony', Math.min(tw / 2, livW - 90), 0, 180, 140);
+    if (o.furnish) {
+      put('roundTable', tw - 110, -td / 2, 0, { w: 80, d: 80 });
+      put('chair', tw - 180, -td / 2, 90);
+      put('chair', tw - 40, -td / 2, 270);
+      put('plant', 35, -td + 35);
+    }
+  }
   putOpening('window', Math.min(150, livW / 2), 0, 0, 140);
   if (o.furnish) {
     put('tvStand', 25, zc, 90);

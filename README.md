@@ -8,11 +8,16 @@ senza build: HTML, CSS e JavaScript modules.
 
 - **Crea la tua casa**: menu guidato (camere, bagni, cucina separata o a vista, studio, lavanderia,
   ripostiglio, corridoio, dimensioni) con anteprima della piantina; può già arredarla.
-- **Stanze**: rettangolari o a forma libera (a L, a U…), pavimento a scelta. Si modificano trascinando
-  un muro (le stanze vicine si adattano), i pallini sugli angoli, scrivendo la misura di ogni lato
-  o creando una rientranza con ⊕. Le stanze si trascinano e i mobili dentro le seguono.
-  I muri condivisi vengono uniti in automatico.
-- **Porte e finestre**: si agganciano ai muri e li tagliano; la porta mostra l'arco di apertura.
+- **Disegno a mano libera** (scheda *Pianta* o barra a sinistra): muri dritti, obliqui o curvi,
+  stanze rettangolari al volo, **divisori** senza muro (es. separare l'ingresso) e **ringhiere**
+  per terrazzi e balconi. Mentre disegni puoi scrivere la lunghezza esatta + Invio.
+- **Stanze riconosciute da sole**: ogni spazio chiuso diventa una stanza; tipo, nome e pavimento
+  vengono dedotti da forma, porte e arredi (bagno, camera, cucina, ingresso, corridoio, terrazzo…)
+  e si possono sempre cambiare a mano.
+- **Modifica**: trascina muri (le stanze vicine si adattano), angoli, il rombo arancione per curvare
+  un muro; scrivi le misure dei lati; dividi o elimina un muro.
+- **Porte e finestre** (anche portefinestre e vetrate scorrevoli): si agganciano ai muri e li tagliano;
+  la porta mostra l'arco di apertura.
 - **Mobili** (~30 elementi tra soggiorno, camera, cucina, bagno, ufficio): dimensioni e colore
   modificabili, rotazione, aggancio alla griglia e ai muri.
 - **Controlli**: sovrapposizioni e mobili fuori dai muri vengono segnalati in rosso.
@@ -49,6 +54,9 @@ Poi apri <http://localhost:8123>.
 - `js/catalog.js` – catalogo e modelli 3D dei mobili costruiti con primitive
 - `js/textures.js` – texture dei pavimenti generate su canvas
 - `js/presets.js` – appartamenti di esempio
+- `js/plan.js` – modello a grafo di muri: disegno, riconoscimento stanze e tipo, conversione vecchi progetti
+- `js/geometry.js` – geometria 2D (archi, intersezioni, poligoni)
+- `tests/plan.test.mjs` – test del modello: `node tests/plan.test.mjs`
 - `js/generator.js` – genera la piantina dalle risposte del menu guidato
 - `js/wizard.js` – menu "Crea la tua casa" con anteprima
 - `css/style.css` – stile

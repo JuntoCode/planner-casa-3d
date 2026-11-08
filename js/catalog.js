@@ -351,7 +351,10 @@ export const CATALOG = [
     { type: 'door90', name: 'Porta 90', build: 'door', w: 90, d: 10, h: 210, color: '#8a6a4a', opening: true },
     { type: 'arch', name: 'Passaggio', build: 'arch', w: 100, d: 10, h: 220, color: '#f4f3ef', opening: true },
     { type: 'window', name: 'Finestra', build: 'window', w: 120, d: 10, h: 130, elev: 90, color: '#f4f3ef', opening: true },
-    { type: 'balcony', name: 'Portafinestra', build: 'window', w: 140, d: 10, h: 230, elev: 0, color: '#f4f3ef', opening: true },
+    { type: 'windowSmall', name: 'Finestra piccola', build: 'window', w: 60, d: 10, h: 80, elev: 120, color: '#f4f3ef', opening: true },
+    { type: 'balcony', name: 'Portafinestra 2 ante', build: 'window', w: 140, d: 10, h: 230, elev: 0, color: '#f4f3ef', opening: true },
+    { type: 'balcony1', name: 'Portafinestra 1 anta', build: 'window', w: 80, d: 10, h: 230, elev: 0, color: '#f4f3ef', opening: true },
+    { type: 'slider', name: 'Vetrata scorrevole', build: 'window', w: 240, d: 10, h: 230, elev: 0, color: '#3b3f45', opening: true },
   ] },
 ];
 

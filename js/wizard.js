@@ -4,6 +4,7 @@ import { DEFAULT_OPTIONS, generateHome, homeName, backRoomCount } from './genera
 
 const FLOOR_FILL = {
   parquet: '#e2c9a6', walnut: '#a9846a', tiles: '#eceae5', gres: '#d9d4cc', concrete: '#cfccc7', carpet: '#b7c0c9',
+  decking: '#b5a593', cotto: '#d39a80',
 };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -15,7 +16,10 @@ function planSvg(home) {
   }
   const pad = 30, fs = Math.max(maxX - minX, maxZ - minZ) / 34;
   const rooms = home.rooms.map(r => `<rect x="${r.x}" y="${r.z}" width="${r.w}" height="${r.d}" fill="${FLOOR_FILL[r.floor] || '#ddd'}"/>`).join('');
-  const walls = home.rooms.map(r => `<rect x="${r.x}" y="${r.z}" width="${r.w}" height="${r.d}" fill="none" stroke="#4f565e" stroke-width="10"/>`).join('');
+  // Terraces first, so the house walls are drawn over their shared side.
+  const walls = [...home.rooms].sort((a, b) => !!b.terrace - !!a.terrace).map(r => r.terrace
+    ? `<rect x="${r.x}" y="${r.z}" width="${r.w}" height="${r.d}" fill="none" stroke="#7a8794" stroke-width="4" stroke-dasharray="14 8"/>`
+    : `<rect x="${r.x}" y="${r.z}" width="${r.w}" height="${r.d}" fill="none" stroke="#4f565e" stroke-width="10"/>`).join('');
   const gaps = home.items.filter(i => ['door', 'door90', 'arch', 'window', 'balcony'].includes(i.type)).map(i => {
     const w = i.w || (i.type === 'door90' ? 90 : 80);
     const h = i.rot % 180 === 0;
@@ -69,6 +73,7 @@ export function createWizard({ onCreate, onPreset, onImport }) {
             </div>
           </div>
           ${toggle('corridor', 'Corridoio', 'tra zona giorno e zona notte')}
+          ${toggle('terrace', 'Terrazzo', 'davanti al soggiorno, con portafinestra')}
           <div class="wz-row col"><span>Dimensioni <small class="inline" data-out="size"></small></span>
             <input type="range" min="0.8" max="1.3" step="0.05" data-k="size">
           </div>
@@ -86,7 +91,7 @@ export function createWizard({ onCreate, onPreset, onImport }) {
       <footer>
         <div class="wz-alt"><span>Oppure</span>
           <button type="button" data-preset="trilocale">Esempio arredato</button>
-          <button type="button" data-preset="vuoto">Stanza vuota</button>
+          <button type="button" data-preset="blank">✎ Disegna da zero</button>
           <button type="button" data-act="import">Importa progetto</button>
         </div>
         <button type="button" class="primary" data-act="create">Crea la casa →</button>
@@ -109,9 +114,11 @@ export function createWizard({ onCreate, onPreset, onImport }) {
     q('[data-k=wallH]').value = o.wallH;
     q('[data-out=size]').textContent = o.size < 0.9 ? 'compatte' : o.size <= 1.1 ? 'standard' : 'ampie';
     const home = generateHome(o);
-    const area = home.rooms.reduce((s, r) => s + r.w * r.d, 0) / 10000;
+    const sumArea = list => list.reduce((s, r) => s + r.w * r.d, 0) / 10000;
+    const inside = home.rooms.filter(r => !r.terrace), outside = home.rooms.filter(r => r.terrace);
     q('.wz-svg').innerHTML = planSvg(home);
-    q('.wz-sum').innerHTML = `<b>${homeName(o)}</b> · ${home.rooms.length} ambienti · ${area.toFixed(0)} m² calpestabili`;
+    q('.wz-sum').innerHTML = `<b>${homeName(o)}</b> · ${inside.length} ambienti · ${sumArea(inside).toFixed(0)} m² calpestabili`
+      + (outside.length ? ` + ${sumArea(outside).toFixed(0)} m² di terrazzo` : '');
   }
 
   dlg.addEventListener('click', e => {

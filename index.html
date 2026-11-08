@@ -51,18 +51,26 @@
     <aside id="sidebar">
       <nav class="tabs">
         <button data-tab="furniture" class="on">Mobili</button>
-        <button data-tab="rooms">Stanze</button>
+        <button data-tab="plan">Pianta</button>
         <button data-tab="list">Elenco</button>
       </nav>
       <section id="tab-furniture" class="tab on">
         <input id="search" type="search" placeholder="Cerca: letto, divano, porta…" autocomplete="off">
         <div id="catalog"></div>
       </section>
-      <section id="tab-rooms" class="tab"></section>
+      <section id="tab-plan" class="tab"></section>
       <section id="tab-list" class="tab"></section>
     </aside>
 
     <div id="viewport">
+      <div id="tools" class="tools" role="toolbar" aria-label="Strumenti di disegno">
+        <button data-tool="select" class="on" title="Seleziona e sposta"><i>↖</i><span>Seleziona</span></button>
+        <button data-tool="wall" title="Disegna muri"><i>✎</i><span>Muro</span></button>
+        <button data-tool="room" title="Disegna una stanza rettangolare"><i>▭</i><span>Stanza</span></button>
+        <button data-tool="divider" title="Dividi una stanza senza muro (es. ingresso)"><i>┆</i><span>Divisorio</span></button>
+        <button data-tool="railing" title="Ringhiera di terrazzo o balcone"><i>⫼</i><span>Ringhiera</span></button>
+      </div>
+      <div id="drawHint" class="draw-hint" hidden></div>
       <div id="status" class="status" hidden></div>
       <div id="coach" class="coach" hidden>
         <div><b>Ecco la tua piantina.</b> Trascina i muri per sistemare le misure, clicca una stanza per nome, pavimento e forma.</div>
@@ -75,7 +83,7 @@
         <span class="furniture-only"><b>Trascina</b> un mobile per spostarlo</span>
         <span class="furniture-only"><kbd>R</kbd> ruota</span>
         <span class="furniture-only"><kbd>Canc</kbd> elimina</span>
-        <span class="rooms-only">Trascina un <b>muro</b>, un <b>angolo</b> o un <b>pavimento</b></span>
+        <span class="rooms-only">Trascina un <b>muro</b>, un <b>angolo</b> o un <b>pavimento</b> · <kbd>Canc</kbd> elimina</span>
         <span class="hide-narrow"><b>Sinistro</b> gira · <b>Destro</b> sposta · <b>Rotella</b> zoom</span>
       </div>
     </div>

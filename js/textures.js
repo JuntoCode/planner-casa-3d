@@ -11,7 +11,25 @@ export const FLOORS = {
   gres: 'Gres 60×60',
   concrete: 'Resina / cemento',
   carpet: 'Moquette',
+  decking: 'Doghe esterne',
+  cotto: 'Cotto',
 };
+
+// Outdoor decking: long boards with dark gaps.
+function decking(seed) {
+  const [c, g] = makeCanvas();
+  const r = rng(seed);
+  const rows = 6, rh = 512 / rows;
+  g.fillStyle = '#3b3530';
+  g.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < rows; i++) {
+    g.fillStyle = new THREE.Color('#8f7a64').offsetHSL(0, (r() - 0.5) * 0.05, (r() - 0.5) * 0.08).getStyle();
+    g.fillRect(0, i * rh + 4, 512, rh - 8);
+    g.fillStyle = 'rgba(0,0,0,0.07)';
+    for (let k = 0; k < 9; k++) g.fillRect(0, i * rh + 4 + r() * (rh - 8), 512, 1);
+  }
+  return c;
+}
 
 function rng(seed) {
   let s = seed % 2147483647 || 1;
@@ -87,6 +105,8 @@ export function floorTexture(kind) {
       gres: () => tiles(2, '#cfcac2', '#a8a29a', 5),
       concrete: () => noise('#b9b6b1', 0.08, 9),
       carpet: () => noise('#8e9aa6', 0.12, 13),
+      decking: () => decking(17),
+      cotto: () => tiles(3, '#b5674a', '#d8c7b4', 19),
     }[kind] || (() => noise('#cccccc', 0.05, 1));
     const t = new THREE.CanvasTexture(canvas());
     t.colorSpace = THREE.SRGBColorSpace;

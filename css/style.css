@@ -118,6 +118,8 @@ main { flex: 1; display: flex; min-height: 0; }
 .f-gres { background: #cfcac2; background-image: linear-gradient(#a8a29a 1px, transparent 1px), linear-gradient(90deg, #a8a29a 1px, transparent 1px); background-size: 11px 11px; }
 .f-concrete { background: #b9b6b1; }
 .f-carpet { background: #8e9aa6; }
+.f-decking { background: repeating-linear-gradient(0deg, #8f7a64 0 6px, #3b3530 6px 8px); }
+.f-cotto { background: #b5674a; background-image: linear-gradient(#d8c7b4 1px, transparent 1px), linear-gradient(90deg, #d8c7b4 1px, transparent 1px); background-size: 9px 9px; }
 .wide { width: 100%; }
 .presets { display: flex; flex-direction: column; gap: 6px; }
 .presets button { text-align: left; }
@@ -191,6 +193,38 @@ body.rooms-mode .furniture-only { display: none; }
 .primary:hover:not(:disabled) { background: #2560c6 !important; border-color: #2560c6 !important; }
 .primary-soft { background: var(--accent-soft); color: var(--accent); border-color: #cddcf8; font-weight: 600; }
 .primary-soft:hover:not(:disabled) { background: #dce8fc !important; border-color: #b7cdf4 !important; }
+
+/* drawing tools */
+.tools {
+  position: absolute; top: 12px; left: 12px; z-index: 3; display: flex; flex-direction: column; gap: 2px;
+  background: var(--panel); border-radius: 12px; padding: 4px; box-shadow: var(--shadow);
+}
+.tools button {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; border: 0; border-radius: 9px;
+  padding: 6px 6px 5px; min-width: 62px; font-size: 11px; color: var(--muted); background: none;
+}
+.tools button i { font-style: normal; font-size: 17px; line-height: 1.1; color: var(--text); }
+.tools button.on { background: var(--accent); color: #fff; }
+.tools button.on i { color: #fff; }
+.tools button:hover:not(.on) { background: var(--bg) !important; }
+.draw-hint {
+  position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); z-index: 3;
+  max-width: min(620px, calc(100% - 120px)); background: rgba(29, 36, 48, .92); color: #fff;
+  border-radius: 10px; padding: 8px 14px; font-size: 12.5px; line-height: 1.45; text-align: center; pointer-events: none;
+}
+.draw-hint[hidden] { display: none; }
+.draw-hint kbd { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.3); color: #fff; }
+.tool-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tool-grid button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 12px; }
+.tool-grid button i { font-style: normal; font-size: 18px; }
+.tool-grid button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.seg.wide-seg { display: flex; }
+.seg.wide-seg button { flex: 1; }
+.curve-row input[type=range] { flex: 1; accent-color: #f08c2e; }
+.curve-row .unit { width: 90px; }
+.dim-label.typing { background: #f08c2e; }
+.room-label.auto b::after { content: " ✦"; color: var(--accent); font-weight: 400; font-size: 10px; }
+.field small { font-size: 11px; color: var(--muted); }
 
 /* side lengths of the selected room */
 .edge-label {
@@ -309,6 +343,9 @@ label.wz-row { cursor: pointer; }
   .help { display: none; }
   .status { top: 8px; font-size: 12px; }
   #newBtn { padding: 6px 8px; }
+  .tools button { min-width: 0; padding: 7px 8px; }
+  .tools button span { display: none; }
+  .draw-hint { bottom: 12px; max-width: calc(100% - 80px); left: calc(50% + 28px); }
   .wz-body { grid-template-columns: 1fr; }
   .wz-svg { min-height: 200px; }
   .coach { flex-wrap: wrap; }
