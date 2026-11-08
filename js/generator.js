@@ -177,9 +177,9 @@ export function generateHome(opts) {
     else O('door', w - 55, 0, 0, 80);
 
     if (r.kind === 'bed' || r.kind === 'sleep') O('window', w / 2, d, 180, 120);
-    if (r.kind === 'bath') O('window', w / 2, d, 180, 60, { h: 80, elev: 120 });
+    if (r.kind === 'bath') O('vasistas', w / 2, d, 180, 80);
     if (r.kind === 'studio') O('window', w / 2, d, 180, 120);
-    if (r.kind === 'laundry') O('window', w / 2, d, 180, 60, { h: 80, elev: 120 });
+    if (r.kind === 'laundry') O('vasistas', w / 2, d, 180, 80);
     if (!o.furnish) return;
 
     if (r.kind === 'bed' || r.kind === 'sleep') {

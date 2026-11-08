@@ -1879,6 +1879,6 @@ renderer.setAnimationLoop(() => {
 
 // Handy for debugging from the browser console.
 window.planner = {
-  get state() { return state; }, get rooms() { return rooms; }, get camera() { return camera; }, scene,
+  get state() { return state; }, get rooms() { return rooms; }, get camera() { return camera; }, get controls() { return controls; }, scene,
   select, addItem, setView, setTab, setTool, undo, wizard, startProject, findConflicts,
 };

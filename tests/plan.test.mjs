@@ -7,7 +7,7 @@ const P = await import(pathToFileURL(path.join(dir, 'js/plan.js')).href);
 const Gen = await import(pathToFileURL(path.join(dir, 'js/generator.js')).href);
 const G = await import(pathToFileURL(path.join(dir, 'js/geometry.js')).href);
 
-const OPEN = new Set(['door', 'door90', 'arch', 'window', 'balcony']);
+const OPEN = new Set(['door', 'door90', 'arch', 'window', 'balcony', 'vasistas']);
 let fails = 0;
 const check = (name, cond, extra = '') => { if (!cond) fails++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${name} ${extra}`); };
 const names = rooms => rooms.map(r => `${r.meta.name}(${(r.area / 1e4).toFixed(1)})`).join(', ');

@@ -290,6 +290,17 @@ const B = {
     box(g, w - 2 * f, h - 2 * f, 0.01, '#bfe0f0', 0, f, 0, GLASS);
     g.children.forEach(m => { m.userData.tall = true; });
   },
+  // Small high window for bathrooms: bottom-hinged sash, frosted glass, handle on top.
+  vasistas(g, w, d, h, c) {
+    const f = 0.04;
+    for (const s of [-1, 1]) box(g, f, h, d + 0.02, c, s * (w / 2 - f / 2), 0, 0);
+    box(g, w, f, d + 0.02, c, 0, h - f, 0);
+    box(g, w, f, d + 0.02, c, 0, 0, 0);
+    box(g, w - 2 * f, 0.012, 0.03, shade(c, -0.12), 0, f, 0);
+    box(g, w - 2 * f, h - 2 * f, 0.012, '#d3e3ea', 0, f, 0, { transparent: true, opacity: 0.75, roughness: 0.55 });
+    for (const s of [-1, 1]) box(g, 0.1, 0.018, 0.025, '#9a9a9a', 0, h - f - 0.04, s * 0.02, METAL);
+    g.children.forEach(m => { m.userData.tall = true; });
+  },
 };
 
 function mulberry(a) {
@@ -351,6 +362,8 @@ export const CATALOG = [
     { type: 'door90', name: 'Porta 90', build: 'door', w: 90, d: 10, h: 210, color: '#8a6a4a', opening: true },
     { type: 'arch', name: 'Passaggio', build: 'arch', w: 100, d: 10, h: 220, color: '#f4f3ef', opening: true },
     { type: 'window', name: 'Finestra', build: 'window', w: 120, d: 10, h: 130, elev: 90, color: '#f4f3ef', opening: true },
+    { type: 'vasistas', name: 'Vasistas (bagno)', build: 'vasistas', w: 80, d: 10, h: 45, elev: 175, color: '#f4f3ef', opening: true },
+    { type: 'vasistasWide', name: 'Vasistas largo', build: 'vasistas', w: 120, d: 10, h: 45, elev: 175, color: '#f4f3ef', opening: true },
     { type: 'windowSmall', name: 'Finestra piccola', build: 'window', w: 60, d: 10, h: 80, elev: 120, color: '#f4f3ef', opening: true },
     { type: 'balcony', name: 'Portafinestra 2 ante', build: 'window', w: 140, d: 10, h: 230, elev: 0, color: '#f4f3ef', opening: true },
     { type: 'balcony1', name: 'Portafinestra 1 anta', build: 'window', w: 80, d: 10, h: 230, elev: 0, color: '#f4f3ef', opening: true },

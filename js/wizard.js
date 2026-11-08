@@ -20,11 +20,13 @@ function planSvg(home) {
   const walls = [...home.rooms].sort((a, b) => !!b.terrace - !!a.terrace).map(r => r.terrace
     ? `<rect x="${r.x}" y="${r.z}" width="${r.w}" height="${r.d}" fill="none" stroke="#7a8794" stroke-width="4" stroke-dasharray="14 8"/>`
     : `<rect x="${r.x}" y="${r.z}" width="${r.w}" height="${r.d}" fill="none" stroke="#4f565e" stroke-width="10"/>`).join('');
-  const gaps = home.items.filter(i => ['door', 'door90', 'arch', 'window', 'balcony'].includes(i.type)).map(i => {
+  const DOORS = ['door', 'door90', 'arch', 'balcony', 'balcony1', 'slider'];
+  const WINDOWS = ['window', 'windowSmall', 'vasistas', 'vasistasWide'];
+  const gaps = home.items.filter(i => DOORS.includes(i.type) || WINDOWS.includes(i.type)).map(i => {
     const w = i.w || (i.type === 'door90' ? 90 : 80);
     const h = i.rot % 180 === 0;
     const [x1, y1, x2, y2] = h ? [i.x - w / 2, i.z, i.x + w / 2, i.z] : [i.x, i.z - w / 2, i.x, i.z + w / 2];
-    const win = i.type === 'window';
+    const win = WINDOWS.includes(i.type);
     return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${win ? '#9fd0ea' : '#ffffff'}" stroke-width="${win ? 6 : 12}"/>`;
   }).join('');
   const labels = home.rooms.map(r => {
