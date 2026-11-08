@@ -274,6 +274,12 @@ const B = {
     const line = box(g, 0.012, 0.002, lw, '#7a8794', -lw / 2 + 0.006, 0.003, d / 2 + lw / 2);
     line.castShadow = false;
   },
+  arch(g, w, d, h, c) {
+    const f = 0.05;
+    for (const s of [-1, 1]) box(g, f, h, d + 0.02, c, s * (w / 2 - f / 2), 0, 0);
+    box(g, w, f, d + 0.02, c, 0, h - f, 0);
+    g.children.forEach(m => { m.userData.tall = true; });
+  },
   window(g, w, d, h, c) {
     const f = 0.05;
     for (const s of [-1, 1]) box(g, f, h, d + 0.02, c, s * (w / 2 - f / 2), 0, 0);
@@ -343,6 +349,7 @@ export const CATALOG = [
   { cat: 'Porte e finestre', items: [
     { type: 'door', name: 'Porta', build: 'door', w: 80, d: 10, h: 210, color: '#f2f0eb', opening: true },
     { type: 'door90', name: 'Porta 90', build: 'door', w: 90, d: 10, h: 210, color: '#8a6a4a', opening: true },
+    { type: 'arch', name: 'Passaggio', build: 'arch', w: 100, d: 10, h: 220, color: '#f4f3ef', opening: true },
     { type: 'window', name: 'Finestra', build: 'window', w: 120, d: 10, h: 130, elev: 90, color: '#f4f3ef', opening: true },
     { type: 'balcony', name: 'Portafinestra', build: 'window', w: 140, d: 10, h: 230, elev: 0, color: '#f4f3ef', opening: true },
   ] },

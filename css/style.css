@@ -183,6 +183,114 @@ main { flex: 1; display: flex; min-height: 0; }
 .help b { color: var(--text); font-weight: 600; }
 .rooms-only { display: none; }
 body.rooms-mode .rooms-only { display: inline; color: var(--accent); }
+body.rooms-mode .furniture-only { display: none; }
+
+.primary {
+  background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600;
+}
+.primary:hover:not(:disabled) { background: #2560c6 !important; border-color: #2560c6 !important; }
+.primary-soft { background: var(--accent-soft); color: var(--accent); border-color: #cddcf8; font-weight: 600; }
+.primary-soft:hover:not(:disabled) { background: #dce8fc !important; border-color: #b7cdf4 !important; }
+
+/* side lengths of the selected room */
+.edge-label {
+  pointer-events: auto; display: flex; align-items: center; gap: 2px;
+  background: #fff; border: 1.5px solid var(--accent); border-radius: 99px; padding: 1px 2px 1px 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.15); font-size: 12px;
+}
+.edge-label input {
+  width: 46px; border: 0; padding: 2px 0; text-align: right; font-weight: 600; color: var(--accent);
+  background: transparent; -moz-appearance: textfield;
+}
+.edge-label input::-webkit-inner-spin-button { display: none; }
+.edge-label input:focus { outline: none; }
+.edge-label em { font-style: normal; color: var(--muted); font-size: 11px; margin-right: 2px; }
+.edge-label button {
+  border: 0; padding: 0; width: 20px; height: 20px; border-radius: 50%; font-size: 14px; line-height: 1;
+  color: var(--accent); background: var(--accent-soft);
+}
+.edge-label button:hover { background: var(--accent) !important; color: #fff; }
+
+.howto { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.howto > div { display: flex; gap: 8px; align-items: flex-start; }
+.howto b { color: var(--text); font-weight: 600; }
+.howto .ico { width: 18px; flex-shrink: 0; text-align: center; font-style: normal; color: var(--accent); font-weight: 700; }
+.howto .dot-h {
+  width: 12px; height: 12px; margin: 2px 3px 0; flex-shrink: 0; border-radius: 50%;
+  background: #fff; border: 3px solid var(--accent);
+}
+
+.coach {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 3;
+  display: flex; align-items: center; gap: 12px; max-width: min(640px, calc(100% - 24px));
+  background: var(--panel); border-radius: 12px; padding: 10px 10px 10px 16px; box-shadow: var(--shadow);
+  font-size: 13px; line-height: 1.4;
+}
+.coach[hidden], .toast[hidden] { display: none; }
+.toast {
+  position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 4;
+  background: #1d2430; color: #fff; padding: 8px 14px; border-radius: 9px; font-size: 13px; box-shadow: var(--shadow);
+}
+
+/* "Crea la tua casa" dialog */
+.wizard {
+  border: 0; border-radius: 18px; padding: 0; width: min(920px, calc(100vw - 24px)); max-height: calc(100vh - 24px);
+  box-shadow: 0 20px 60px rgba(10, 20, 40, .3); color: var(--text);
+}
+.wizard::backdrop { background: rgba(20, 28, 40, .45); backdrop-filter: blur(2px); }
+.wz { display: flex; flex-direction: column; max-height: calc(100vh - 24px); }
+.wz header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 22px 6px; }
+.wz h2 { margin: 0 0 4px; font-size: 22px; }
+.wz header p { margin: 0; color: var(--muted); font-size: 14px; }
+.wz-body { display: grid; grid-template-columns: 340px 1fr; gap: 22px; padding: 14px 22px; overflow-y: auto; }
+.wz-form { display: flex; flex-direction: column; gap: 4px; }
+.wz-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0;
+  border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 500; cursor: default;
+}
+.wz-row.col { flex-direction: column; align-items: stretch; gap: 8px; }
+.wz-row > span { display: flex; flex-direction: column; }
+.wz-row small { font-size: 11.5px; color: var(--muted); font-weight: 400; }
+.wz-row small.inline { display: inline; margin-left: 6px; }
+.wz-row > span:has(small.inline) { display: block; }
+.wz-row input[type=range] { width: 100%; accent-color: var(--accent); }
+.wz-row .unit { width: 100px; }
+.stepper { display: flex; align-items: center; gap: 4px; }
+.stepper button { width: 32px; height: 32px; padding: 0; font-size: 18px; border-radius: 50%; }
+.stepper b { min-width: 26px; text-align: center; font-size: 17px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips label { cursor: pointer; }
+.chips input { position: absolute; opacity: 0; pointer-events: none; }
+.chips span {
+  display: inline-block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 99px; font-size: 13px; font-weight: 500;
+}
+.chips input:checked + span { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.chips input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+label.wz-row { cursor: pointer; }
+.switch { position: relative; width: 40px; height: 23px; flex-shrink: 0; }
+.switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.switch i { position: absolute; inset: 0; border-radius: 99px; background: #d0d5dc; transition: background .15s; pointer-events: none; }
+.switch i::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 17px; height: 17px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .15s;
+}
+.switch input:checked + i { background: var(--accent); }
+.switch input:checked + i::after { transform: translateX(17px); }
+.switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wz-preview { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.wz-svg {
+  background: #f1f3f6; border-radius: 12px; padding: 12px; display: grid; place-items: center;
+  min-height: 300px; flex: 1;
+}
+.wz-svg svg { width: 100%; height: 100%; max-height: 380px; }
+.wz-sum { font-size: 14px; color: var(--muted); }
+.wz-sum b { color: var(--text); }
+.wz footer {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 14px 22px 18px; border-top: 1px solid var(--line);
+}
+.wz-alt { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.wz footer .primary { font-size: 15px; padding: 10px 20px; border-radius: 10px; }
 
 @media (max-width: 1100px) {
   .project-name { display: none; }
@@ -196,7 +304,12 @@ body.rooms-mode .rooms-only { display: inline; color: var(--accent); }
     transform: translateX(-102%); transition: transform .2s ease; box-shadow: var(--shadow);
   }
   body.sidebar-open #sidebar { transform: none; }
-  #props { top: auto; bottom: 12px; left: 12px; right: 12px; width: auto; max-height: 55%; }
+  #props { top: auto; bottom: 12px; left: 12px; right: 12px; width: auto; max-height: 42%; gap: 9px; }
+  #props .howto { display: none; }
   .help { display: none; }
   .status { top: 8px; font-size: 12px; }
+  #newBtn { padding: 6px 8px; }
+  .wz-body { grid-template-columns: 1fr; }
+  .wz-svg { min-height: 200px; }
+  .coach { flex-wrap: wrap; }
 }

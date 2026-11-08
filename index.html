@@ -38,6 +38,7 @@
       <option value="high">Muri: alti</option>
       <option value="low">Muri: bassi</option>
     </select>
+    <button id="newBtn" class="primary-soft" title="Crea una nuova casa con il menu guidato">✦ Nuova casa</button>
     <div class="group hide-narrow">
       <button id="fitBtn" title="Inquadra tutto">Centra</button>
       <button id="photoBtn" title="Salva un'immagine PNG">Foto</button>
@@ -63,13 +64,19 @@
 
     <div id="viewport">
       <div id="status" class="status" hidden></div>
+      <div id="coach" class="coach" hidden>
+        <div><b>Ecco la tua piantina.</b> Trascina i muri per sistemare le misure, clicca una stanza per nome, pavimento e forma.</div>
+        <button data-act="3d" class="primary">Vedi in 3D e arreda →</button>
+        <button data-act="close" class="x" title="Chiudi">×</button>
+      </div>
+      <div id="toast" class="toast" hidden></div>
       <aside id="props" hidden></aside>
       <div class="help">
-        <span><b>Trascina</b> un mobile per spostarlo</span>
-        <span><kbd>R</kbd> ruota</span>
-        <span><kbd>Canc</kbd> elimina</span>
+        <span class="furniture-only"><b>Trascina</b> un mobile per spostarlo</span>
+        <span class="furniture-only"><kbd>R</kbd> ruota</span>
+        <span class="furniture-only"><kbd>Canc</kbd> elimina</span>
+        <span class="rooms-only">Trascina un <b>muro</b>, un <b>angolo</b> o un <b>pavimento</b></span>
         <span class="hide-narrow"><b>Sinistro</b> gira · <b>Destro</b> sposta · <b>Rotella</b> zoom</span>
-        <span class="rooms-only">Trascina un <b>pavimento</b> per spostare la stanza</span>
       </div>
     </div>
   </main>

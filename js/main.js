@@ -4,8 +4,11 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 import { CATALOG, TYPES, SWATCHES, buildModel } from './catalog.js';
 import { FLOORS, TILE_M, floorTexture } from './textures.js';
 import { PRESETS } from './presets.js';
+import { createWizard } from './wizard.js';
 
 // All state values are in centimeters; the 3D scene works in meters (cm / 100).
+// Rooms are orthogonal polygons (`pts`, list of [x, z] corners), so they can be
+// rectangles, L-shapes and so on. Walls are generated from the room edges.
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -21,6 +24,159 @@ let tab = 'furniture';
 let walls = [];
 const history = { stack: [], index: -1 };
 
+// ---------- polygon helpers ----------
+
+const rectPts = (x, z, w, d) => [[x, z], [x + w, z], [x + w, z + d], [x, z + d]];
+
+function roomBox(r) {
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+  for (const [x, z] of r.pts) { x0 = Math.min(x0, x); z0 = Math.min(z0, z); x1 = Math.max(x1, x); z1 = Math.max(z1, z); }
+  return { x: x0, z: z0, w: x1 - x0, d: z1 - z0 };
+}
+const isRect = r => r.pts.length === 4;
+
+function polyArea(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x1, z1] = pts[i], [x2, z2] = pts[(i + 1) % pts.length];
+    a += x1 * z2 - x2 * z1;
+  }
+  return Math.abs(a) / 2;
+}
+
+function inPoly(x, z, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, zi] = pts[i], [xj, zj] = pts[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function edgeDist(x, z, pts) {
+  let best = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const [x1, z1] = pts[i], [x2, z2] = pts[(i + 1) % pts.length];
+    const dx = x2 - x1, dz = z2 - z1, l2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / l2));
+    best = Math.min(best, Math.hypot(x - (x1 + t * dx), z - (z1 + t * dz)));
+  }
+  return best;
+}
+
+// The point deepest inside the room: where its label goes.
+function roomPole(r) {
+  const b = roomBox(r);
+  let best = null, bd = -1;
+  const N = 16;
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const x = b.x + ((i + 0.5) / N) * b.w, z = b.z + ((j + 0.5) / N) * b.d;
+    if (!inPoly(x, z, r.pts)) continue;
+    const d = edgeDist(x, z, r.pts);
+    if (d > bd) { bd = d; best = { x, z }; }
+  }
+  return best || { x: b.x + b.w / 2, z: b.z + b.d / 2 };
+}
+
+function edgeOf(P, Q) {
+  if (Math.abs(P[1] - Q[1]) < 0.5) return { o: 'h', c: P[1], lo: Math.min(P[0], Q[0]), hi: Math.max(P[0], Q[0]) };
+  if (Math.abs(P[0] - Q[0]) < 0.5) return { o: 'v', c: P[0], lo: Math.min(P[1], Q[1]), hi: Math.max(P[1], Q[1]) };
+  return null;
+}
+const alongOf = (p, o) => (o === 'h' ? p[0] : p[1]);
+const near = (a, b) => Math.abs(a - b) < 0.5;
+
+// Drop duplicate and collinear corners.
+function simplify(pts) {
+  const p = pts.map(q => [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10]);
+  for (let changed = true; changed && p.length > 3;) {
+    changed = false;
+    for (let i = 0; i < p.length; i++) {
+      const a = p[(i - 1 + p.length) % p.length], b = p[i], c = p[(i + 1) % p.length];
+      const dup = near(a[0], b[0]) && near(a[1], b[1]);
+      const col = (near(a[0], b[0]) && near(b[0], c[0])) || (near(a[1], b[1]) && near(b[1], c[1]));
+      if (dup || col) { p.splice(i, 1); changed = true; break; }
+    }
+  }
+  return p;
+}
+
+function validPoly(pts) {
+  const n = pts.length;
+  if (n < 4 || polyArea(pts) < 5000) return false;
+  const E = [];
+  for (let i = 0; i < n; i++) {
+    const e = edgeOf(pts[i], pts[(i + 1) % n]);
+    if (!e) return false;
+    E.push(e);
+  }
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;
+      const a = E[i], b = E[j];
+      if (a.o === b.o) {
+        if (near(a.c, b.c) && Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo) > -0.5) return false;
+      } else {
+        const h = a.o === 'h' ? a : b, v = a.o === 'h' ? b : a;
+        if (v.c >= h.lo - 0.5 && v.c <= h.hi + 0.5 && h.c >= v.lo - 0.5 && h.c <= v.hi + 0.5) return false;
+      }
+    }
+  }
+  return true;
+}
+
+// Move the stretch [a, b] of the wall line (o, c) by `delta`, perpendicular to it.
+// Edges that only partly overlap the stretch get split, which creates a step.
+function shiftPiece(pts, o, c, a, b, delta) {
+  const n = pts.length;
+  const E = pts.map((P, i) => edgeOf(P, pts[(i + 1) % n]));
+  const hits = e => e && e.o === o && near(e.c, c) && Math.min(e.hi, b) - Math.max(e.lo, a) > 0.5;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const P = pts[i], Q = pts[(i + 1) % n];
+    const al = alongOf(P, o);
+    out.push({ p: [...P], mv: (hits(E[i]) || hits(E[(i - 1 + n) % n])) && al >= a - 0.5 && al <= b + 0.5 });
+    if (!hits(E[i])) continue;
+    const ql = alongOf(Q, o), dir = Math.sign(ql - al);
+    const cuts = [a, b].filter(t => t > Math.min(al, ql) + 0.5 && t < Math.max(al, ql) - 0.5).sort((m, k) => dir * (m - k));
+    for (const t of cuts) {
+      const pt = o === 'h' ? [t, c] : [c, t];
+      const entering = dir > 0 ? t === a : t === b;
+      out.push({ p: [...pt], mv: !entering }, { p: [...pt], mv: entering });
+    }
+  }
+  return out.map(({ p, mv }) => {
+    if (mv) { if (o === 'h') p[1] += delta; else p[0] += delta; }
+    return p;
+  });
+}
+
+// One wall move applied to every room (rooms sharing the wall stay attached)
+// and to the doors/windows sitting on it. Returns null if a room would break.
+function moveWall(base, o, c, a, b, delta) {
+  const rooms = base.rooms.map(pts => simplify(shiftPiece(pts, o, c, a, b, delta)));
+  if (!rooms.every(validPoly)) return null;
+  const ops = base.ops.map(op => {
+    const it = getItem(op.id);
+    const orient = openingOrient(it);
+    const perp = orient === 'h' ? op.z : op.x, al = orient === 'h' ? op.x : op.z;
+    if (orient !== o || !near(perp, c) || al < a - 0.5 || al > b + 0.5) return op;
+    return o === 'h' ? { ...op, z: op.z + delta } : { ...op, x: op.x + delta };
+  });
+  return { rooms, ops };
+}
+
+function snapshot() {
+  return {
+    rooms: state.rooms.map(r => r.pts.map(p => [...p])),
+    ops: state.items.filter(isOpening).map(i => ({ id: i.id, x: i.x, z: i.z })),
+  };
+}
+function applySnapshot(s) {
+  state.rooms.forEach((r, i) => { r.pts = s.rooms[i]; });
+  for (const op of s.ops) { const it = getItem(op.id); it.x = op.x; it.z = op.z; }
+}
+
 // ---------- state helpers ----------
 
 let uidCounter = 0;
@@ -28,7 +184,7 @@ const newId = () => (Date.now() + uidCounter++).toString(36) + Math.random().toS
 const getItem = id => state.items.find(i => i.id === id);
 const getRoom = id => state.rooms.find(r => r.id === id);
 const isOpening = it => TYPES[it.type].opening;
-const isDoor = it => TYPES[it.type].build === 'door';
+const isDoor = it => ['door', 'arch'].includes(TYPES[it.type].build);
 
 function normalize(s) {
   s = s && typeof s === 'object' ? s : {};
@@ -37,11 +193,12 @@ function normalize(s) {
     wallH: +s.wallH || 270,
     wallT: +s.wallT || 10,
     snap: +s.snap || 5,
-    rooms: (Array.isArray(s.rooms) ? s.rooms : []).map(r => ({
-      id: r.id || newId(), name: String(r.name || 'Stanza'),
-      x: +r.x || 0, z: +r.z || 0, w: Math.max(50, +r.w || 300), d: Math.max(50, +r.d || 300),
-      floor: FLOORS[r.floor] ? r.floor : 'parquet',
-    })),
+    rooms: (Array.isArray(s.rooms) ? s.rooms : []).map(r => {
+      let pts = Array.isArray(r.pts) && r.pts.length >= 4 ? r.pts.map(p => [+p[0] || 0, +p[1] || 0]) : null;
+      if (!pts) pts = rectPts(+r.x || 0, +r.z || 0, Math.max(50, +r.w || 300), Math.max(50, +r.d || 300));
+      pts = simplify(pts);
+      return { id: r.id || newId(), name: String(r.name || 'Stanza'), floor: FLOORS[r.floor] ? r.floor : 'parquet', pts };
+    }).filter(r => validPoly(r.pts)),
     items: (Array.isArray(s.items) ? s.items : []).filter(i => TYPES[i?.type]).map(i => {
       const t = TYPES[i.type];
       return {
@@ -52,7 +209,7 @@ function normalize(s) {
       };
     }),
   };
-  for (const it of out.items) if (isOpening(it)) it.d = out.wallT;
+  for (const it of out.items) if (TYPES[it.type].opening) it.d = out.wallT;
   return out;
 }
 
@@ -91,9 +248,9 @@ function updateUndoButtons() {
 function bounds() {
   if (!state.rooms.length) return { minX: 0, maxX: 4, minZ: 0, maxZ: 4, cx: 2, cz: 2, w: 4, d: 4 };
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const r of state.rooms) {
-    minX = Math.min(minX, r.x); maxX = Math.max(maxX, r.x + r.w);
-    minZ = Math.min(minZ, r.z); maxZ = Math.max(maxZ, r.z + r.d);
+  for (const r of state.rooms) for (const [x, z] of r.pts) {
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
   }
   const b = { minX: minX / 100, maxX: maxX / 100, minZ: minZ / 100, maxZ: maxZ / 100 };
   b.w = b.maxX - b.minX; b.d = b.maxZ - b.minZ;
@@ -101,7 +258,10 @@ function bounds() {
   return b;
 }
 
-const roomAt = p => state.rooms.find(r => p.x >= r.x && p.x <= r.x + r.w && p.z >= r.z && p.z <= r.z + r.d);
+const roomAt = p => state.rooms.find(r => inPoly(p.x, p.z, r.pts));
+const areaM2 = r => (polyArea(r.pts) / 10000).toFixed(1).replace('.', ',');
+const fmtM = cm => (cm / 100).toFixed(2).replace('.', ',');
+const wallTop = () => (wallMode === 'low' ? Math.min(state.wallH, 45) : state.wallH);
 
 // ---------- three.js setup ----------
 
@@ -143,7 +303,9 @@ const floorsG = new THREE.Group();
 const wallsG = new THREE.Group();
 const itemsG = new THREE.Group();
 const overlayG = new THREE.Group();
-scene.add(floorsG, wallsG, itemsG, overlayG);
+const handlesG = new THREE.Group();
+const hoverG = new THREE.Group();
+scene.add(floorsG, wallsG, itemsG, overlayG, handlesG, hoverG);
 const itemObjs = new Map();
 
 const persp = new THREE.PerspectiveCamera(45, 1, 0.05, 300);
@@ -151,7 +313,7 @@ const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
 let orthoHalf = 5;
 let camera = persp;
 let controls;
-let target3d = null;
+let view3d = null;
 
 function makeControls() {
   controls?.dispose();
@@ -196,7 +358,7 @@ function fitView() {
     persp.position.set(b.cx + s * 0.25, s * 0.95 + 1.5, b.cz + s * 0.95 + 1.5);
   } else {
     const a = viewport.clientWidth / Math.max(1, viewport.clientHeight);
-    orthoHalf = Math.max(b.d / 2, b.w / 2 / a) * 1.12 + 0.4;
+    orthoHalf = Math.max(b.d / 2, b.w / 2 / a) * 1.15 + 0.5;
     ortho.zoom = 1;
     updateOrtho();
     ortho.position.set(b.cx, 50, b.cz + 0.001);
@@ -206,16 +368,15 @@ function fitView() {
 }
 
 function setView(v) {
-  if (camera === persp) target3d = { pos: persp.position.clone(), target: controls.target.clone() };
+  if (camera === persp) view3d = { pos: persp.position.clone(), target: controls.target.clone() };
   camera = v === '2d' ? ortho : persp;
   makeControls();
-  if (v === '3d' && target3d) {
-    persp.position.copy(target3d.pos);
-    controls.target.copy(target3d.target);
+  if (v === '3d' && view3d) {
+    persp.position.copy(view3d.pos);
+    controls.target.copy(view3d.target);
     controls.update();
   } else fitView();
   document.querySelectorAll('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
-  document.body.classList.toggle('plan', v === '2d');
   sun.castShadow = v !== '2d'; // shadows only clutter the floor plan
 }
 
@@ -241,42 +402,43 @@ function clearGroup(g, keepMaterials = false) {
   while (g.children.length) g.remove(g.children[0]);
 }
 
+const shapeOf = pts => new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x / 100, -z / 100)));
+
 function rebuildRooms() {
   clearGroup(floorsG);
   for (const r of state.rooms) {
-    const w = r.w / 100, d = r.d / 100;
     const tex = floorTexture(r.floor).clone();
-    tex.repeat.set(w / TILE_M, d / TILE_M);
-    tex.offset.set(r.x / 100 / TILE_M, r.z / 100 / TILE_M);
+    tex.repeat.set(1 / TILE_M, 1 / TILE_M);
     tex.needsUpdate = true;
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(shapeOf(r.pts)), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
     m.rotation.x = -Math.PI / 2;
-    m.position.set((r.x + r.w / 2) / 100, 0.002, (r.z + r.d / 2) / 100);
+    m.position.y = 0.002;
     m.receiveShadow = true;
     m.userData = { kind: 'room', id: r.id };
     floorsG.add(m);
 
+    const b = roomBox(r);
     const el = document.createElement('div');
     el.className = 'room-label';
-    el.innerHTML = `<b>${esc(r.name)}</b><span>${fmtM(r.w)} × ${fmtM(r.d)} m · ${(r.w * r.d / 10000).toFixed(1).replace('.', ',')} m²</span>`;
+    el.innerHTML = `<b>${esc(r.name)}</b><span>${isRect(r) ? `${fmtM(b.w)} × ${fmtM(b.d)} m · ` : ''}${areaM2(r)} m²</span>`;
     const lbl = new CSS2DObject(el);
-    lbl.position.set((r.x + r.w / 2) / 100, 0.05, (r.z + r.d / 2) / 100);
+    const p = roomPole(r);
+    lbl.position.set(p.x / 100, 0.05, p.z / 100);
     floorsG.add(lbl);
   }
 }
-const fmtM = cm => (cm / 100).toFixed(2).replace('.', ',');
 
 // Merge room edges into wall segments so shared walls are built once.
 function computeWalls() {
   const lines = new Map();
-  const add = (orient, c, a, b) => {
-    const k = orient + ':' + Math.round(c * 10);
-    if (!lines.has(k)) lines.set(k, { orient, c, segs: [] });
-    lines.get(k).segs.push([Math.min(a, b), Math.max(a, b)]);
-  };
   for (const r of state.rooms) {
-    add('h', r.z, r.x, r.x + r.w); add('h', r.z + r.d, r.x, r.x + r.w);
-    add('v', r.x, r.z, r.z + r.d); add('v', r.x + r.w, r.z, r.z + r.d);
+    for (let i = 0; i < r.pts.length; i++) {
+      const e = edgeOf(r.pts[i], r.pts[(i + 1) % r.pts.length]);
+      if (!e) continue;
+      const k = e.o + ':' + Math.round(e.c * 10);
+      if (!lines.has(k)) lines.set(k, { o: e.o, c: e.c, segs: [] });
+      lines.get(k).segs.push([e.lo, e.hi]);
+    }
   }
   const out = [];
   for (const L of lines.values()) {
@@ -284,9 +446,9 @@ function computeWalls() {
     let cur = null;
     for (const s of L.segs) {
       if (cur && s[0] <= cur[1] + 0.5) cur[1] = Math.max(cur[1], s[1]);
-      else { if (cur) out.push({ orient: L.orient, c: L.c, a: cur[0], b: cur[1] }); cur = [...s]; }
+      else { if (cur) out.push({ orient: L.o, c: L.c, a: cur[0], b: cur[1] }); cur = [...s]; }
     }
-    if (cur) out.push({ orient: L.orient, c: L.c, a: cur[0], b: cur[1] });
+    if (cur) out.push({ orient: L.o, c: L.c, a: cur[0], b: cur[1] });
   }
   return out;
 }
@@ -295,23 +457,23 @@ const openingOrient = it => (Math.round(it.rot / 90) % 2 === 0 ? 'h' : 'v');
 function onWall(it, w) {
   if (openingOrient(it) !== w.orient) return false;
   const perp = w.orient === 'h' ? it.z : it.x;
-  const along = w.orient === 'h' ? it.x : it.z;
-  return Math.abs(perp - w.c) < 1 && along >= w.a - 1 && along <= w.b + 1;
+  const al = w.orient === 'h' ? it.x : it.z;
+  return Math.abs(perp - w.c) < 1 && al >= w.a - 1 && al <= w.b + 1;
 }
 
 function rebuildWalls() {
   clearGroup(wallsG);
   walls = computeWalls();
   const T = state.wallT;
-  const H = wallMode === 'low' ? Math.min(state.wallH, 45) : state.wallH;
+  const H = wallTop();
   const openings = state.items.filter(isOpening);
   for (const w of walls) {
     const side = new THREE.MeshStandardMaterial({ color: '#f4f2ee', roughness: 0.92 });
     const top = new THREE.MeshStandardMaterial({ color: '#4f565e', roughness: 0.9 });
     const mats = [side, side, top, side, side, side];
     const ops = openings.filter(o => onWall(o, w)).map(o => {
-      const along = w.orient === 'h' ? o.x : o.z;
-      return { s: Math.max(w.a, along - o.w / 2), e: Math.min(w.b, along + o.w / 2), y0: o.elev, y1: o.elev + o.h };
+      const al = w.orient === 'h' ? o.x : o.z;
+      return { s: Math.max(w.a, al - o.w / 2), e: Math.min(w.b, al + o.w / 2), y0: o.elev, y1: o.elev + o.h };
     }).sort((p, q) => p.s - q.s);
 
     const pieces = [];
@@ -326,7 +488,7 @@ function rebuildWalls() {
     if (w.b + T / 2 > cur) pieces.push([cur, w.b + T / 2, 0, H]);
 
     const g = new THREE.Group();
-    g.userData = { kind: 'wall', orient: w.orient, c: w.c, mats: [side, top], faded: false };
+    g.userData = { kind: 'wall', orient: w.orient, c: w.c, a: w.a, b: w.b, mats: [side, top], faded: false };
     for (const [s, e, y0, y1] of pieces) {
       if (e - s < 0.5 || y1 - y0 < 0.5) continue;
       const len = (e - s) / 100, hh = (y1 - y0) / 100, t = T / 100, mid = (s + e) / 200;
@@ -399,6 +561,13 @@ function refreshItem(it) {
   updateOverlay();
 }
 
+function rebuildGeometry() {
+  rebuildRooms();
+  rebuildWalls();
+  for (const it of state.items) if (isOpening(it)) placeObj(itemObjs.get(it.id), it);
+  updateOverlay();
+}
+
 function rebuildAll() {
   rebuildRooms();
   rebuildWalls();
@@ -444,8 +613,7 @@ function findConflicts() {
       if (A.elev >= B.elev + B.h || B.elev >= A.elev + A.h) continue;
       if (overlap(polys[i], polys[j])) { bad.add(A.id); bad.add(B.id); }
     }
-    const inside = polys[i].every(([x, z]) => state.rooms.some(r =>
-      x >= r.x + T2 - 0.6 && x <= r.x + r.w - T2 + 0.6 && z >= r.z + T2 - 0.6 && z <= r.z + r.d - T2 + 0.6));
+    const inside = polys[i].every(([x, z]) => state.rooms.some(r => inPoly(x, z, r.pts) && edgeDist(x, z, r.pts) >= T2 - 0.6));
     if (!inside) bad.add(list[i].id);
   }
   return bad;
@@ -453,8 +621,13 @@ function findConflicts() {
 
 const overlayMats = {
   bad: new THREE.MeshBasicMaterial({ color: BAD, transparent: true, opacity: 0.35, depthWrite: false }),
-  sel: new THREE.MeshBasicMaterial({ color: SEL, transparent: true, opacity: 0.22, depthWrite: false }),
+  sel: new THREE.MeshBasicMaterial({ color: SEL, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide }),
+  handle: new THREE.MeshBasicMaterial({ color: SEL, depthTest: false }),
+  handleIn: new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }),
+  hover: new THREE.MeshBasicMaterial({ color: SEL, transparent: true, opacity: 0.45, depthWrite: false }),
 };
+const handleGeo = new THREE.SphereGeometry(0.09, 20, 12);
+const handleInGeo = new THREE.SphereGeometry(0.055, 16, 10);
 
 function footprint(it, mat) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(it.w / 100, Math.max(it.d, 4) / 100), mat);
@@ -464,9 +637,17 @@ function footprint(it, mat) {
   return m;
 }
 
+function clearOverlay(g) {
+  g.traverse(o => {
+    if (o.geometry && o.geometry !== handleGeo && o.geometry !== handleInGeo) o.geometry.dispose();
+    if (o.material?.isLineBasicMaterial) o.material.dispose();
+  });
+  while (g.children.length) g.remove(g.children[0]);
+}
+
 function updateOverlay() {
-  overlayG.traverse(o => { o.geometry?.dispose(); if (o.material?.isLineBasicMaterial) o.material.dispose(); });
-  while (overlayG.children.length) overlayG.remove(overlayG.children[0]);
+  clearOverlay(overlayG);
+  clearOverlay(handlesG);
   const conflicts = findConflicts();
   for (const id of conflicts) overlayG.add(footprint(getItem(id), overlayMats.bad));
 
@@ -492,18 +673,122 @@ function updateOverlay() {
   }
   if (selection?.kind === 'room') {
     const r = getRoom(selection.id);
-    if (r) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w / 100, r.d / 100), overlayMats.sel);
-      m.rotation.x = -Math.PI / 2;
-      m.position.set((r.x + r.w / 2) / 100, 0.01, (r.z + r.d / 2) / 100);
-      overlayG.add(m);
-    }
+    if (r) roomEditOverlay(r);
   }
+
   const st = $('#status');
   st.hidden = conflicts.size === 0;
   st.textContent = conflicts.size === 1
     ? '⚠ 1 mobile si sovrappone ad altro o esce dai muri'
     : `⚠ ${conflicts.size} mobili si sovrappongono o escono dai muri`;
+}
+
+// Selected room: blue fill, a handle on every corner and an editable length on every side.
+function roomEditOverlay(r) {
+  const fill = new THREE.Mesh(new THREE.ShapeGeometry(shapeOf(r.pts)), overlayMats.sel);
+  fill.rotation.x = -Math.PI / 2;
+  fill.position.y = 0.01;
+  overlayG.add(fill);
+
+  const y = wallTop() / 100 + 0.03;
+  const n = r.pts.length;
+  r.pts.forEach(([x, z], k) => {
+    const h = new THREE.Mesh(handleGeo, overlayMats.handle);
+    h.position.set(x / 100, y, z / 100);
+    h.renderOrder = 10;
+    h.userData = { kind: 'handle', room: r.id, k };
+    const inner = new THREE.Mesh(handleInGeo, overlayMats.handleIn);
+    inner.renderOrder = 11;
+    inner.raycast = () => {};
+    h.add(inner);
+    handlesG.add(h);
+  });
+
+  for (let i = 0; i < n; i++) {
+    const P = r.pts[i], Q = r.pts[(i + 1) % n];
+    const e = edgeOf(P, Q);
+    if (!e || e.hi - e.lo < 25) continue;
+    const mx = (P[0] + Q[0]) / 2, mz = (P[1] + Q[1]) / 2;
+    // Put the label just inside the room.
+    const nx = e.o === 'v' ? 1 : 0, nz = e.o === 'h' ? 1 : 0;
+    const s = inPoly(mx + nx * 2, mz + nz * 2, r.pts) ? 1 : -1;
+    const el = document.createElement('div');
+    el.className = 'edge-label';
+    const canSplit = e.hi - e.lo >= 120;
+    el.innerHTML = `<input type="number" min="30" step="5" value="${Math.round(e.hi - e.lo)}" title="Lunghezza del lato (cm)"><em>cm</em>`
+      + (canSplit ? `<button type="button" title="Crea una rientranza a metà di questo lato (forma a L)">⊕</button>` : '');
+    el.querySelector('input').addEventListener('change', ev => setEdgeLength(r.id, i, parseFloat(ev.target.value)));
+    el.querySelector('input').addEventListener('keydown', ev => { if (ev.key === 'Enter') ev.target.blur(); });
+    el.querySelector('button')?.addEventListener('click', () => splitEdge(r.id, i));
+    const lbl = new CSS2DObject(el);
+    lbl.position.set((mx + nx * s * 32) / 100, y, (mz + nz * s * 32) / 100);
+    overlayG.add(lbl);
+  }
+}
+
+// ---------- room shape editing ----------
+
+function commitShape(res) {
+  if (!res) return false;
+  applySnapshot(res);
+  rebuildGeometry();
+  return true;
+}
+
+function setEdgeLength(roomId, i, L) {
+  const ri = state.rooms.findIndex(r => r.id === roomId);
+  const pts = state.rooms[ri]?.pts;
+  if (!pts || !isFinite(L)) return updateOverlay();
+  const n = pts.length;
+  const P = pts[i], Q = pts[(i + 1) % n], R = pts[(i + 2) % n];
+  const e = edgeOf(P, Q), en = edgeOf(Q, R);
+  const delta = (Math.max(30, L) - (e.hi - e.lo)) * Math.sign(alongOf(Q, e.o) - alongOf(P, e.o));
+  if (commitShape(moveWall(snapshot(), en.o, en.c, en.lo, en.hi, delta))) { commit(); afterShapeChange(); }
+  else { updateOverlay(); toast('Questa misura non è possibile: la stanza si incrocerebbe con se stessa.'); }
+}
+
+function splitEdge(roomId, i) {
+  const r = getRoom(roomId);
+  const n = r.pts.length;
+  const e = edgeOf(r.pts[i], r.pts[(i + 1) % n]);
+  const mid = Math.round((e.lo + e.hi) / 2 / 5) * 5;
+  const probe = (e.hi + mid) / 2;
+  const s = (e.o === 'h' ? inPoly(probe, e.c + 2, r.pts) : inPoly(e.c + 2, probe, r.pts)) ? 1 : -1;
+  for (const depth of [60, 40, 20]) {
+    if (commitShape(moveWall(snapshot(), e.o, e.c, mid, e.hi, s * depth))) { commit(); afterShapeChange(); return; }
+  }
+  toast('Lato troppo corto per una rientranza.');
+}
+
+function afterShapeChange() {
+  updateSun();
+  renderProps();
+  renderRoomsTab();
+}
+
+// The stretch of wall between two junctions (corners of any room on that line).
+function wallPiece(data, al, whole) {
+  const { orient: o, c, a, b } = data;
+  if (whole) return [a, b];
+  const js = new Set([a, b]);
+  for (const r of state.rooms) for (const p of r.pts) {
+    const perp = o === 'h' ? p[1] : p[0], t = alongOf(p, o);
+    if (near(perp, c) && t > a + 0.5 && t < b - 0.5) js.add(t);
+  }
+  const arr = [...js].sort((x, y) => x - y);
+  for (let i = 0; i < arr.length - 1; i++) if (al >= arr[i] - 0.5 && al <= arr[i + 1] + 0.5) return [arr[i], arr[i + 1]];
+  return [a, b];
+}
+
+function showHover(o, c, a, b) {
+  clearOverlay(hoverG);
+  if (o == null) return;
+  const T = state.wallT / 100 + 0.05, H = wallTop() / 100 + 0.02, len = (b - a) / 100;
+  const m = new THREE.Mesh(o === 'h' ? new THREE.BoxGeometry(len, H, T) : new THREE.BoxGeometry(T, H, len), overlayMats.hover);
+  const mid = (a + b) / 200;
+  if (o === 'h') m.position.set(mid, H / 2, c / 100); else m.position.set(c / 100, H / 2, mid);
+  m.renderOrder = 5;
+  hoverG.add(m);
 }
 
 // ---------- snapping ----------
@@ -515,15 +800,15 @@ function snapOpening(px, pz, it) {
   for (const w of walls) {
     if (w.b - w.a < it.w) continue;
     const pAlong = w.orient === 'h' ? px : pz, pPerp = w.orient === 'h' ? pz : px;
-    const along = Math.min(w.b - it.w / 2, Math.max(w.a + it.w / 2, snapTo(pAlong, 5)));
-    const dist = Math.hypot(pAlong - along, pPerp - w.c);
+    const al = Math.min(w.b - it.w / 2, Math.max(w.a + it.w / 2, snapTo(pAlong, 5)));
+    const dist = Math.hypot(pAlong - al, pPerp - w.c);
     if (!best || dist < best.dist) {
       // Doors swing toward the side the pointer is on.
       const side = pPerp >= w.c;
       best = {
         dist,
-        x: w.orient === 'h' ? along : w.c,
-        z: w.orient === 'h' ? w.c : along,
+        x: w.orient === 'h' ? al : w.c,
+        z: w.orient === 'h' ? w.c : al,
         rot: w.orient === 'h' ? (side ? 0 : 180) : (side ? 90 : 270),
       };
     }
@@ -551,6 +836,18 @@ function snapToWalls(it, x, z) {
   return [x, z];
 }
 
+// Snap a coordinate to the grid, or to a nearby corner coordinate of another room.
+function snapCoord(v, axis, exclude, free) {
+  if (free) return Math.round(v);
+  let best = snapTo(v, state.snap), bd = 8;
+  for (const r of state.rooms) for (const p of r.pts) {
+    const t = p[axis];
+    if (exclude?.(t)) continue;
+    if (Math.abs(t - v) < bd) { bd = Math.abs(t - v); best = t; }
+  }
+  return best;
+}
+
 // ---------- picking + dragging ----------
 
 const raycaster = new THREE.Raycaster();
@@ -571,15 +868,21 @@ function isVisible(o) {
   for (; o; o = o.parent) if (!o.visible) return false;
   return true;
 }
-function pickItem() {
+
+function pick() {
+  const hh = raycaster.intersectObjects(handlesG.children, false)[0];
+  if (hh) return { kind: 'handle', ...hh.object.userData };
   const hits = raycaster.intersectObjects([...itemsG.children, ...wallsG.children], true);
   for (const h of hits) {
     if (!isVisible(h.object)) continue;
     let o = h.object;
     while (o && !o.userData.kind) o = o.parent;
     if (!o) continue;
-    if (o.userData.kind === 'wall') { if (o.userData.faded) continue; return null; }
-    if (o.userData.kind === 'item') return o.userData.id;
+    if (o.userData.kind === 'wall') {
+      if (o.userData.faded) continue;
+      return { kind: 'wall', data: o.userData, point: { x: h.point.x * 100, z: h.point.z * 100 } };
+    }
+    if (o.userData.kind === 'item') return { kind: 'item', id: o.userData.id };
   }
   return null;
 }
@@ -597,11 +900,19 @@ canvas.addEventListener('pointerdown', e => {
   setRay(e);
   const p = floorPoint();
   if (!p) return;
-  const id = pickItem();
-  if (id) {
-    select({ kind: 'item', id });
-    const it = getItem(id);
-    drag = { kind: 'item', id, off: { x: it.x - p.x, z: it.z - p.z }, moved: false };
+  const hit = pick();
+  if (hit?.kind === 'handle') {
+    const ri = state.rooms.findIndex(r => r.id === hit.room);
+    drag = { kind: 'corner', ri, k: hit.k, V: [...state.rooms[ri].pts[hit.k]], base: snapshot(), moved: false };
+  } else if (hit?.kind === 'item') {
+    select({ kind: 'item', id: hit.id });
+    const it = getItem(hit.id);
+    drag = { kind: 'item', id: hit.id, off: { x: it.x - p.x, z: it.z - p.z }, moved: false };
+  } else if (hit?.kind === 'wall' && tab === 'rooms') {
+    const d = hit.data;
+    const al = d.orient === 'h' ? hit.point.x : hit.point.z;
+    const [a, b] = wallPiece(d, al, e.shiftKey);
+    drag = { kind: 'wall', o: d.orient, c: d.c, a, b, p0: d.orient === 'h' ? p.z : p.x, base: snapshot(), moved: false };
   } else if (tab === 'rooms') {
     const rid = pickRoom();
     if (!rid) return;
@@ -609,31 +920,53 @@ canvas.addEventListener('pointerdown', e => {
     const r = getRoom(rid);
     const T2 = state.wallT / 2 + 1;
     const carried = state.items
-      .filter(i => i.x >= r.x - T2 && i.x <= r.x + r.w + T2 && i.z >= r.z - T2 && i.z <= r.z + r.d + T2)
+      .filter(i => inPoly(i.x, i.z, r.pts) || edgeDist(i.x, i.z, r.pts) < T2)
       .map(i => ({ id: i.id, x: i.x, z: i.z }));
-    drag = { kind: 'room', id: rid, start: { x: r.x, z: r.z }, p0: p, carried, moved: false };
+    drag = { kind: 'room', id: rid, start: r.pts.map(q => [...q]), p0: p, carried, moved: false };
   } else return;
   controls.enabled = false;
-  canvas.setPointerCapture(e.pointerId);
+  try { canvas.setPointerCapture(e.pointerId); } catch { /* synthetic events */ }
 }, { capture: true });
 
 canvas.addEventListener('pointermove', e => {
-  if (!drag) return;
   setRay(e);
+  if (!drag) return hover(e);
   const p = floorPoint();
   if (!p) return;
   if (!drag.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 3) return;
   drag.moved = true;
   if (drag.kind === 'item') dragItem(p, e.altKey);
-  else dragRoom(p, e.altKey);
+  else if (drag.kind === 'room') dragRoom(p, e.altKey);
+  else if (drag.kind === 'wall') dragWall(p, e.altKey);
+  else if (drag.kind === 'corner') dragCorner(p, e.altKey);
 });
+
+function hover(e) {
+  if (e.buttons) return;
+  const hit = pick();
+  if (hit?.kind === 'handle') { canvas.style.cursor = 'move'; showHover(); return; }
+  if (hit?.kind === 'wall' && tab === 'rooms') {
+    const d = hit.data;
+    const [a, b] = wallPiece(d, d.orient === 'h' ? hit.point.x : hit.point.z, e.shiftKey);
+    showHover(d.orient, d.c, a, b);
+    canvas.style.cursor = d.orient === 'h' ? 'ns-resize' : 'ew-resize';
+    return;
+  }
+  showHover();
+  canvas.style.cursor = hit?.kind === 'item' ? 'grab' : '';
+}
 
 function endPointer(e) {
   if (drag) {
-    const moved = drag.moved;
+    const { moved, kind } = drag;
     drag = null;
     controls.enabled = true;
-    if (moved) { commit(); renderProps(); renderList(); renderRoomsTab(); }
+    showHover();
+    if (moved) {
+      commit();
+      renderProps(); renderList(); renderRoomsTab();
+      if (kind !== 'item') updateSun();
+    } else if (kind === 'wall' && e.type === 'pointerup') select(null);
     down = null;
     return;
   }
@@ -642,6 +975,7 @@ function endPointer(e) {
 }
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('pointerleave', () => { if (!drag) showHover(); });
 
 function dragItem(p, free) {
   const it = getItem(drag.id);
@@ -664,30 +998,61 @@ function dragItem(p, free) {
 
 function dragRoom(p, free) {
   const r = getRoom(drag.id);
-  let nx = drag.start.x + (p.x - drag.p0.x);
-  let nz = drag.start.z + (p.z - drag.p0.z);
+  let dx = p.x - drag.p0.x, dz = p.z - drag.p0.z;
   if (!free) {
-    nx = snapTo(nx, 10); nz = snapTo(nz, 10);
-    // Snap to the edges of the other rooms.
-    const best = (v, size, edges) => {
-      let d = Infinity;
-      for (const e of edges) for (const a of [v, v + size]) if (Math.abs(e - a) < Math.abs(d)) d = e - a;
-      return Math.abs(d) < 20 ? v + d : v;
+    dx = snapTo(dx, 10); dz = snapTo(dz, 10);
+    // Snap the room's corners to the corners of the other rooms.
+    const others = state.rooms.filter(o => o !== r).flatMap(o => o.pts);
+    const best = (d, axis) => {
+      let fix = Infinity;
+      for (const q of drag.start) for (const o of others) {
+        const f = o[axis] - (q[axis] + d);
+        if (Math.abs(f) < Math.abs(fix)) fix = f;
+      }
+      return Math.abs(fix) < 20 ? d + fix : d;
     };
-    const others = state.rooms.filter(o => o !== r);
-    nx = best(nx, r.w, others.flatMap(o => [o.x, o.x + o.w]));
-    nz = best(nz, r.d, others.flatMap(o => [o.z, o.z + o.d]));
+    dx = best(dx, 0); dz = best(dz, 1);
   }
-  const dx = nx - drag.start.x, dz = nz - drag.start.z;
-  r.x = nx; r.z = nz;
+  r.pts = drag.start.map(([x, z]) => [x + dx, z + dz]);
   for (const c of drag.carried) {
     const it = getItem(c.id);
     it.x = c.x + dx; it.z = c.z + dz;
   }
   rebuildRooms();
   rebuildWalls();
-  rebuildItems();
+  for (const c of drag.carried) placeObj(itemObjs.get(c.id), getItem(c.id));
   updateOverlay();
+}
+
+function dragWall(p, free) {
+  const raw = drag.c + ((drag.o === 'h' ? p.z : p.x) - drag.p0);
+  const target = snapCoord(raw, drag.o === 'h' ? 1 : 0, t => near(t, drag.c), free);
+  const res = moveWall(drag.base, drag.o, drag.c, drag.a, drag.b, target - drag.c);
+  if (commitShape(res)) showHover(drag.o, target, drag.a, drag.b);
+}
+
+function dragCorner(p, free) {
+  const { base, ri, k, V } = drag;
+  const exclude = (axis) => t => near(t, V[axis]);
+  const dx = snapCoord(p.x, 0, exclude(0), free) - V[0];
+  const dz = snapCoord(p.z, 1, exclude(1), free) - V[1];
+  const pts = base.rooms[ri], n = pts.length;
+  const ea = edgeOf(pts[(k - 1 + n) % n], V), eb = edgeOf(V, pts[(k + 1) % n]);
+  const eh = ea?.o === 'h' ? ea : eb, ev = ea?.o === 'v' ? ea : eb;
+  if (!eh || !ev || eh.o !== 'h' || ev.o !== 'v') return;
+  let res = base;
+  if (dz) res = moveWall(res, 'h', eh.c, eh.lo, eh.hi, dz);
+  if (res && dx) {
+    // Find the vertical side through the (possibly moved) corner.
+    const rp = res.rooms[ri], m = rp.length, z = V[1] + dz;
+    let e = null;
+    for (let i = 0; i < m && !e; i++) {
+      const ed = edgeOf(rp[i], rp[(i + 1) % m]);
+      if (ed?.o === 'v' && near(ed.c, V[0]) && z >= ed.lo - 0.5 && z <= ed.hi + 0.5) e = ed;
+    }
+    res = e ? moveWall(res, 'v', e.c, e.lo, e.hi, dx) : null;
+  }
+  commitShape(res);
 }
 
 // Drop from the catalog onto the floor.
@@ -711,11 +1076,10 @@ function select(sel) {
 
 function defaultSpot() {
   const sr = selection?.kind === 'room' && getRoom(selection.id);
-  if (sr) return { x: sr.x + sr.w / 2, z: sr.z + sr.d / 2 };
+  if (sr) return roomPole(sr);
   const t = { x: controls.target.x * 100, z: controls.target.z * 100 };
   if (roomAt(t)) return t;
-  const r = state.rooms[0];
-  return r ? { x: r.x + r.w / 2, z: r.z + r.d / 2 } : t;
+  return state.rooms[0] ? roomPole(state.rooms[0]) : t;
 }
 
 function addItem(type, at) {
@@ -801,7 +1165,8 @@ function nudge(dx, dz) {
 function addRoom() {
   const b = bounds();
   const n = state.rooms.length + 1;
-  const r = { id: newId(), name: `Stanza ${n}`, x: state.rooms.length ? Math.round(b.maxX * 100) : 0, z: state.rooms.length ? Math.round(b.minZ * 100) : 0, w: 300, d: 300, floor: 'parquet' };
+  const x = state.rooms.length ? Math.round(b.maxX * 100) : 0, z = state.rooms.length ? Math.round(b.minZ * 100) : 0;
+  const r = { id: newId(), name: `Stanza ${n}`, floor: 'parquet', pts: rectPts(x, z, 300, 300) };
   state.rooms.push(r);
   rebuildRooms();
   rebuildWalls();
@@ -811,15 +1176,30 @@ function addRoom() {
   commit();
 }
 
-function loadPreset(id) {
-  const p = PRESETS.find(x => x.id === id);
-  if (!p) return;
-  if (!confirm(`Caricare "${p.name}"? Il progetto attuale verrà sostituito (puoi annullare con Ctrl+Z).`)) return;
-  state = normalize(structuredClone(p.data));
+function startProject(data, guided) {
+  state = normalize(structuredClone(data));
   selection = null;
+  view3d = null;
   rebuildAll();
   commit();
-  fitView();
+  if (guided) {
+    setTab('rooms');
+    setView('2d');
+    view3d = null; // the next switch to 3D frames the new home
+    $('#coach').hidden = false;
+  } else {
+    setView(camera === ortho ? '2d' : '3d');
+    fitView();
+  }
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
 }
 
 // ---------- UI: catalog ----------
@@ -931,24 +1311,32 @@ function renderProps() {
   } else {
     const r = getRoom(selection.id);
     if (!r) { el.hidden = true; return; }
+    const b = roomBox(r);
     el.innerHTML = `
       <div class="props-head">
         <div class="room-ico">▦</div>
-        <div><h3>Stanza</h3><small>${(r.w * r.d / 10000).toFixed(1).replace('.', ',')} m²</small></div>
+        <div><h3>Stanza</h3><small>${areaM2(r)} m² · ${isRect(r) ? 'rettangolare' : `${r.pts.length} angoli`}</small></div>
         <button class="x" data-act="close" title="Chiudi (Esc)">×</button>
       </div>
       <label class="field"><span>Nome</span><input type="text" data-k="name" value="${esc(r.name)}"></label>
-      <div class="fields">
-        ${numField('w', 'Larghezza', r.w)}
-        ${numField('d', 'Profondità', r.d)}
-        ${numField('x', 'Posizione X', r.x)}
-        ${numField('z', 'Posizione Z', r.z)}
-      </div>
       <label class="field"><span>Pavimento</span><select data-k="floor">
         ${Object.entries(FLOORS).map(([k, v]) => `<option value="${k}"${k === r.floor ? ' selected' : ''}>${v}</option>`).join('')}
       </select></label>
-      <p class="hint">Nella scheda <b>Stanze</b> puoi trascinare il pavimento per spostarla: i mobili dentro la seguono.</p>
-      <div class="actions"><button data-act="del" class="danger">Elimina stanza</button></div>`;
+      <div class="fields">
+        ${isRect(r) ? numField('w', 'Larghezza', b.w) + numField('d', 'Profondità', b.d) : ''}
+        ${numField('x', 'Posizione X', b.x)}
+        ${numField('z', 'Posizione Z', b.z)}
+      </div>
+      <div class="howto">
+        <div><i class="dot-h"></i><span>Trascina i <b>pallini</b> sugli angoli per allargare o stringere la stanza.</span></div>
+        <div><i class="ico">↔</i><span>Nella scheda <b>Stanze</b> trascina un <b>muro</b> per spostarlo (con <kbd>Shift</kbd> tutto il muro).</span></div>
+        <div><i class="ico">⌗</i><span>Clicca una <b>misura</b> sul lato per scriverla in cm.</span></div>
+        <div><i class="ico">⊕</i><span>Crea una <b>rientranza</b> su un lato per fare stanze a L.</span></div>
+      </div>
+      <div class="actions">
+        ${isRect(r) ? '' : '<button data-act="rect">Rendi rettangolare</button>'}
+        <button data-act="del" class="danger">Elimina stanza</button>
+      </div>`;
   }
   el.hidden = false;
 }
@@ -973,12 +1361,16 @@ function applyProp(k, raw, live = false) {
     if (!live) { commit(); renderProps(); renderList(); }
   } else if (selection?.kind === 'room') {
     const r = getRoom(selection.id);
+    const b = roomBox(r);
     if (k === 'name') r.name = raw.trim() || 'Stanza';
     else if (k === 'floor') r.floor = raw;
     else {
       const v = parseFloat(raw);
       if (!isFinite(v)) return renderProps();
-      r[k] = k === 'w' || k === 'd' ? Math.min(5000, Math.max(50, v)) : v;
+      if (k === 'w') r.pts = rectPts(b.x, b.z, Math.min(5000, Math.max(50, v)), b.d);
+      if (k === 'd') r.pts = rectPts(b.x, b.z, b.w, Math.min(5000, Math.max(50, v)));
+      if (k === 'x') r.pts = r.pts.map(([x, z]) => [x + v - b.x, z]);
+      if (k === 'z') r.pts = r.pts.map(([x, z]) => [x, z + v - b.z]);
     }
     rebuildRooms();
     rebuildWalls();
@@ -1005,13 +1397,36 @@ $('#props').addEventListener('click', e => {
   else if (b.dataset.act === 'close') select(null);
   else if (b.dataset.act === 'del') deleteSelection();
   else if (b.dataset.act === 'dup') duplicateSelection();
+  else if (b.dataset.act === 'rect') {
+    const r = getRoom(selection.id), bx = roomBox(r);
+    r.pts = rectPts(bx.x, bx.z, bx.w, bx.d);
+    rebuildGeometry();
+    commit();
+    afterShapeChange();
+  }
 });
 
 // ---------- UI: rooms tab ----------
 
 function renderRoomsTab() {
-  const total = state.rooms.reduce((s, r) => s + r.w * r.d, 0) / 10000;
+  const total = state.rooms.reduce((s, r) => s + polyArea(r.pts), 0) / 10000;
   $('#tab-rooms').innerHTML = `
+    <div class="block">
+      <h4>Stanze <small>${state.rooms.length} · ${total.toFixed(1).replace('.', ',')} m²</small></h4>
+      <ul class="rows">${state.rooms.map(r => {
+        const b = roomBox(r);
+        return `<li data-select="${r.id}" class="${selection?.id === r.id ? 'on' : ''}">
+          <i class="floor-dot f-${r.floor}"></i>
+          <span><b>${esc(r.name)}</b><small>${isRect(r) ? `${fmtM(b.w)} × ${fmtM(b.d)} m` : 'forma a L / libera'} · ${areaM2(r)} m²</small></span>
+        </li>`;
+      }).join('')}</ul>
+      <button class="wide" id="addRoomBtn">＋ Aggiungi stanza</button>
+      <div class="howto">
+        <div><i class="ico">↔</i><span>Trascina un <b>muro</b>: le stanze vicine si adattano. Con <kbd>Shift</kbd> sposti il muro intero.</span></div>
+        <div><i class="dot-h"></i><span>Seleziona una stanza e trascina i <b>pallini</b> sugli angoli, o scrivi le <b>misure</b> dei lati.</span></div>
+        <div><i class="ico">✥</i><span>Trascina un <b>pavimento</b> per spostare la stanza con i suoi mobili. <kbd>Alt</kbd> = senza aggancio.</span></div>
+      </div>
+    </div>
     <div class="block">
       <h4>Appartamento</h4>
       <div class="fields">
@@ -1021,18 +1436,11 @@ function renderRoomsTab() {
       </div>
     </div>
     <div class="block">
-      <h4>Stanze <small>${state.rooms.length} · ${total.toFixed(1).replace('.', ',')} m²</small></h4>
-      <ul class="rows">${state.rooms.map(r => `
-        <li data-select="${r.id}" class="${selection?.id === r.id ? 'on' : ''}">
-          <i class="floor-dot f-${r.floor}"></i>
-          <span><b>${esc(r.name)}</b><small>${fmtM(r.w)} × ${fmtM(r.d)} m · ${FLOORS[r.floor]}</small></span>
-        </li>`).join('')}</ul>
-      <button class="wide" id="addRoomBtn">＋ Aggiungi stanza</button>
-      <p class="hint">Con questa scheda aperta trascina un pavimento per spostare la stanza: si aggancia ai bordi delle altre. Tieni premuto <kbd>Alt</kbd> per muoverla liberamente.</p>
-    </div>
-    <div class="block">
-      <h4>Parti da un modello</h4>
-      <div class="presets">${PRESETS.map(p => `<button data-preset="${p.id}">${p.name}</button>`).join('')}</div>
+      <h4>Ricomincia</h4>
+      <div class="presets">
+        <button data-act="wizard" class="primary-soft">✦ Crea la tua casa…</button>
+        ${PRESETS.map(p => `<button data-preset="${p.id}">${p.name}</button>`).join('')}
+      </div>
     </div>`;
 }
 
@@ -1040,8 +1448,12 @@ $('#tab-rooms').addEventListener('click', e => {
   const li = e.target.closest('[data-select]');
   if (li) { select({ kind: 'room', id: li.dataset.select }); return; }
   if (e.target.closest('#addRoomBtn')) addRoom();
+  if (e.target.closest('[data-act=wizard]')) wizard.open();
   const p = e.target.closest('[data-preset]');
-  if (p) loadPreset(p.dataset.preset);
+  if (p) {
+    const preset = PRESETS.find(x => x.id === p.dataset.preset);
+    if (confirm(`Caricare "${preset.name}"? Il progetto attuale verrà sostituito (puoi annullare con Ctrl+Z).`)) startProject(preset.data, false);
+  }
 });
 $('#tab-rooms').addEventListener('change', e => {
   const k = e.target.dataset.k;
@@ -1065,14 +1477,12 @@ $('#tab-rooms').addEventListener('change', e => {
 function renderList() {
   const order = Object.keys(TYPES);
   const items = [...state.items].sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type));
-  const counts = {};
-  for (const it of state.items) counts[TYPES[it.type].cat] = (counts[TYPES[it.type].cat] || 0) + 1;
   $('#tab-list').innerHTML = `
     <div class="block">
       <h4>Riepilogo</h4>
       <div class="stats">
         <div><b>${state.rooms.length}</b><span>stanze</span></div>
-        <div><b>${(state.rooms.reduce((s, r) => s + r.w * r.d, 0) / 10000).toFixed(1).replace('.', ',')}</b><span>m²</span></div>
+        <div><b>${(state.rooms.reduce((s, r) => s + polyArea(r.pts), 0) / 10000).toFixed(1).replace('.', ',')}</b><span>m²</span></div>
         <div><b>${state.items.length}</b><span>elementi</span></div>
       </div>
     </div>
@@ -1096,12 +1506,14 @@ $('#tab-list').addEventListener('click', e => {
 
 // ---------- UI: top bar, tabs, keyboard ----------
 
-document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
-  tab = b.dataset.tab;
-  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
-  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x.id === 'tab-' + tab));
-  document.body.classList.toggle('rooms-mode', tab === 'rooms');
-}));
+function setTab(name) {
+  tab = name;
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === name));
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x.id === 'tab-' + name));
+  document.body.classList.toggle('rooms-mode', name === 'rooms');
+  showHover();
+}
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 
 document.querySelectorAll('#viewSeg button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
 $('#wallMode').addEventListener('change', e => {
@@ -1113,7 +1525,14 @@ $('#wallMode').addEventListener('change', e => {
 $('#undoBtn').addEventListener('click', undo);
 $('#redoBtn').addEventListener('click', redo);
 $('#fitBtn').addEventListener('click', fitView);
+$('#newBtn').addEventListener('click', () => wizard.open());
 $('#projectName').addEventListener('change', e => { state.name = e.target.value.trim() || 'Il mio appartamento'; commit(); });
+$('#coach').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  $('#coach').hidden = true;
+  if (b.dataset.act === '3d') { setView('3d'); setTab('furniture'); }
+});
 
 const slug = () => state.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'planner';
 function download(url, name) {
@@ -1122,10 +1541,10 @@ function download(url, name) {
   document.body.appendChild(a); a.click(); a.remove();
 }
 $('#photoBtn').addEventListener('click', () => {
-  overlayG.visible = false;
+  overlayG.visible = handlesG.visible = false;
   renderer.render(scene, camera);
   download(canvas.toDataURL('image/png'), slug() + '.png');
-  overlayG.visible = true;
+  overlayG.visible = handlesG.visible = true;
 });
 $('#exportBtn').addEventListener('click', () => {
   const url = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }));
@@ -1137,11 +1556,7 @@ $('#importInput').addEventListener('change', async e => {
   e.target.value = '';
   if (!f) return;
   try {
-    state = normalize(JSON.parse(await f.text()));
-    selection = null;
-    rebuildAll();
-    commit();
-    fitView();
+    startProject(JSON.parse(await f.text()), false);
   } catch {
     alert('File non valido: serve un progetto esportato da questo planner (.json).');
   }
@@ -1151,7 +1566,7 @@ function closeSidebarOnMobile() { if (matchMedia('(max-width: 820px)').matches) 
 $('#menuBtn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
 
 window.addEventListener('keydown', e => {
-  if (e.target.closest('input, select, textarea')) return;
+  if (e.target.closest('input, select, textarea, dialog')) return;
   const k = e.key.toLowerCase();
   const mod = e.ctrlKey || e.metaKey;
   if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
@@ -1169,7 +1584,14 @@ window.addEventListener('keydown', e => {
 
 // ---------- start ----------
 
-state = normalize(loadSaved() || structuredClone(PRESETS[0].data));
+const wizard = createWizard({
+  onCreate: home => startProject(home, true),
+  onPreset: id => startProject(PRESETS.find(p => p.id === id).data, false),
+  onImport: () => $('#importInput').click(),
+});
+
+const saved = loadSaved();
+state = normalize(saved || structuredClone(PRESETS[0].data));
 makeControls();
 new ResizeObserver(resize).observe(viewport);
 resize();
@@ -1178,6 +1600,7 @@ rebuildAll();
 fitView();
 commit();
 makeThumbs();
+if (!saved) wizard.open();
 
 renderer.setAnimationLoop(() => {
   controls.update();
@@ -1187,4 +1610,4 @@ renderer.setAnimationLoop(() => {
 });
 
 // Handy for debugging from the browser console.
-window.planner = { get state() { return state; }, get camera() { return camera; }, select, addItem, setView, undo };
+window.planner = { get state() { return state; }, get camera() { return camera; }, select, addItem, setView, setTab, undo, wizard, startProject, findConflicts };

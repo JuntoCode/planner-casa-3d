@@ -6,8 +6,11 @@ senza build: HTML, CSS e JavaScript modules.
 
 ## Funzioni
 
-- **Stanze**: dimensioni in cm, posizione, pavimento (parquet, piastrelle, gres, resina, moquette).
-  Le stanze si trascinano e si agganciano ai bordi delle altre; i mobili dentro le seguono.
+- **Crea la tua casa**: menu guidato (camere, bagni, cucina separata o a vista, studio, lavanderia,
+  ripostiglio, corridoio, dimensioni) con anteprima della piantina; può già arredarla.
+- **Stanze**: rettangolari o a forma libera (a L, a U…), pavimento a scelta. Si modificano trascinando
+  un muro (le stanze vicine si adattano), i pallini sugli angoli, scrivendo la misura di ogni lato
+  o creando una rientranza con ⊕. Le stanze si trascinano e i mobili dentro le seguono.
   I muri condivisi vengono uniti in automatico.
 - **Porte e finestre**: si agganciano ai muri e li tagliano; la porta mostra l'arco di apertura.
 - **Mobili** (~30 elementi tra soggiorno, camera, cucina, bagno, ufficio): dimensioni e colore
@@ -46,4 +49,6 @@ Poi apri <http://localhost:8123>.
 - `js/catalog.js` – catalogo e modelli 3D dei mobili costruiti con primitive
 - `js/textures.js` – texture dei pavimenti generate su canvas
 - `js/presets.js` – appartamenti di esempio
+- `js/generator.js` – genera la piantina dalle risposte del menu guidato
+- `js/wizard.js` – menu "Crea la tua casa" con anteprima
 - `css/style.css` – stile
