@@ -222,6 +222,8 @@ body.rooms-mode .furniture-only { display: none; }
 .seg.wide-seg button { flex: 1; }
 .curve-row input[type=range] { flex: 1; accent-color: #f08c2e; }
 .curve-row .unit { width: 90px; }
+.row.quick { flex-wrap: wrap; }
+.row.quick button { flex: 1; }
 .dim-label.typing { background: #f08c2e; }
 .room-label.auto b::after { content: " ✦"; color: var(--accent); font-weight: 400; font-size: 10px; }
 .field small { font-size: 11px; color: var(--muted); }

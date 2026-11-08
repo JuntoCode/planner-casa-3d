@@ -90,4 +90,22 @@ s3.items.push({ id: 'x', type: 'toilet', x: 800, z: 300, rot: 0, w: 38, d: 60, h
 const r3 = P.syncRooms(s3, true);
 check('types guessed', r3.length === 3, names(r3) + ' | ' + r3.map(r => r.meta.type).join(','));
 
+// 9. rounding a square corner with radius 100 removes (1 - π/4)·r² of floor
+const s4 = { wallH: 270, wallT: 10, nodes: [], walls: [], rooms: [], items: [] };
+const sq = [[0, 0], [400, 0], [400, 300], [0, 300]];
+for (let i = 0; i < 4; i++) P.addSegment(s4, sq[i], sq[(i + 1) % 4]);
+s4.items.push({ id: 'win', type: 'window', wall: s4.walls[0].id, t: 300, w: 80, h: 120, elev: 90 });
+const area4 = P.syncRooms(s4, true)[0].area;
+const corner = s4.nodes.find(n => n.x === 400 && n.z === 300).id;
+const info = P.cornerInfo(s4, corner);
+check('corner info', info.ok && info.angle === 90, `${info.angle}° max ${info.maxR}`);
+check('round corner', P.roundCorner(s4, corner, 100));
+const area4b = P.syncRooms(s4, true)[0].area;
+const lost = area4 - area4b, expectLost = (1 - Math.PI / 4) * 100 * 100;
+check('rounded area', Math.abs(lost - expectLost) < 60, `${lost.toFixed(0)} vs ${expectLost.toFixed(0)} cm²`);
+check('window survives', s4.items.length === 1 && s4.walls.some(w => w.id === s4.items[0].wall));
+const nearWin = s4.nodes.find(n => n.x === 400 && n.z === 0).id;
+const blocked = P.cornerInfo(s4, nearWin);
+check('window limits radius', blocked.ok && blocked.maxR <= 55, `max ${blocked.maxR}`);
+
 console.log(fails ? `${fails} FAILED` : 'all good');

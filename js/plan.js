@@ -266,6 +266,55 @@ export function moveWallOp(st, wallId, delta) {
   cleanup(st);
 }
 
+// A corner can be rounded when exactly two straight walls meet there at an angle.
+export function cornerInfo(st, nodeId) {
+  const walls = st.walls.filter(w => w.a === nodeId || w.b === nodeId);
+  if (walls.length !== 2) return { ok: false, reason: 'Si arrotonda solo un angolo dove si incontrano due muri.' };
+  if (walls.some(isCurved)) return { ok: false, reason: 'Uno dei due muri è già curvo.' };
+  const nm = nodeMap(st);
+  const [d1, d2] = walls.map(w => dirFrom(st, w, nodeId, nm));
+  const theta = Math.acos(Math.max(-1, Math.min(1, G.dot(d1, d2))));
+  if (theta > Math.PI - 0.02 || theta < 0.05) return { ok: false, reason: 'I due muri sono in linea: non c’è un angolo da arrotondare.' };
+  // Space free of doors/windows along each wall, measured from the corner.
+  const free = walls.map(w => {
+    const len = wallLength(st, w, nm);
+    let room = len - 5;
+    for (const it of st.items) {
+      if (it.wall !== w.id) continue;
+      const fromCorner = w.a === nodeId ? it.t - it.w / 2 : len - it.t - it.w / 2;
+      room = Math.min(room, fromCorner - 5);
+    }
+    return Math.max(0, room);
+  });
+  const maxR = Math.floor(Math.min(...free) * Math.tan(theta / 2));
+  return { ok: maxR >= 5, reason: maxR >= 5 ? '' : 'Muri troppo corti (o porte troppo vicine) per arrotondare.', walls, d1, d2, theta, maxR, angle: Math.round((theta * 180) / Math.PI) };
+}
+
+// Replace the corner with an arc of radius r tangent to both walls.
+export function roundCorner(st, nodeId, r) {
+  const info = cornerInfo(st, nodeId);
+  if (!info.ok) return false;
+  r = Math.min(r, info.maxR);
+  if (!(r >= 5)) return false;
+  const nm = nodeMap(st);
+  const N = P(nm.get(nodeId));
+  const t = r / Math.tan(info.theta / 2);
+  const p1 = G.add(N, G.mul(info.d1, t)), p2 = G.add(N, G.mul(info.d2, t));
+  const [w1, w2] = info.walls;
+  const a = splitWall(st, w1.id, p1);
+  const b = splitWall(st, w2.id, p2);
+  // Drop the two short stubs that reached the old corner.
+  st.walls = st.walls.filter(w => !((w.a === nodeId && (w.b === a || w.b === b)) || (w.b === nodeId && (w.a === a || w.a === b))));
+  const A = P(nodeMap(st).get(a)), B = P(nodeMap(st).get(b));
+  // Sagitta of the arc, bulging toward where the corner was.
+  const phi = Math.PI - info.theta;
+  const side = Math.sign(G.dot(G.sub(N, A), G.left(G.norm(G.sub(B, A))))) || 1;
+  const bulge = side * r * (1 - Math.cos(phi / 2));
+  st.walls.push({ id: uid('w'), a, b, type: w1.type, t: w1.t, h: w1.h, bulge });
+  cleanup(st);
+  return true;
+}
+
 export function setWallLength(st, wallId, L) {
   const w = st.walls.find(x => x.id === wallId);
   if (!w || isCurved(w) || !(L > 1)) return false;

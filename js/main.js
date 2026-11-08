@@ -13,7 +13,10 @@ import * as Plan from './plan.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const STORAGE_KEY = 'planner-casa-3d-v1';
+// `?sandbox` in the URL uses separate storage, so tests never touch the real project.
+const SANDBOX = new URLSearchParams(location.search).has('sandbox');
+const STORAGE_KEY = 'planner-casa-3d-v1' + (SANDBOX ? '-sandbox' : '');
+const BACKUP_KEY = STORAGE_KEY + '-backup';
 const SEL = 0x2f6fde;
 const BAD = 0xe5484d;
 const THUMBS = {};
@@ -78,8 +81,20 @@ function normalize(d) {
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* storage unavailable */ }
 }
+// A save that can't be opened is copied to its own key, which nothing overwrites.
+function keepUnreadable(raw) {
+  try { localStorage.setItem(`${STORAGE_KEY}-unreadable-${Date.now()}`, raw); } catch { /* storage unavailable */ }
+}
 function loadSaved() {
-  try { const t = localStorage.getItem(STORAGE_KEY); return t ? JSON.parse(t) : null; } catch { return null; }
+  let raw = null;
+  try { raw = localStorage.getItem(STORAGE_KEY); } catch { return null; }
+  if (!raw) return null;
+  // Untouched copy of the project as it was when the page opened.
+  try { localStorage.setItem(BACKUP_KEY, raw); } catch { /* storage unavailable */ }
+  try { return { raw, data: JSON.parse(raw) }; } catch { keepUnreadable(raw); return { raw, data: null }; }
+}
+function loadBackup() {
+  try { const t = localStorage.getItem(BACKUP_KEY); return t ? JSON.parse(t) : null; } catch { return null; }
 }
 
 function refreshRooms(prune = false) {
@@ -99,6 +114,7 @@ function commit() {
 }
 
 function restore(snap) {
+  cornerPreview = null;
   state = JSON.parse(snap);
   refreshRooms();
   if (selection && !(selection.kind === 'item' ? getItem(selection.id) : selection.kind === 'wall' ? getWall(selection.id) : getRoom(selection.id))) selection = null;
@@ -631,6 +647,7 @@ function updateOverlay() {
   }
   const showNodes = tab === 'plan' && tool === 'select';
   const hot = new Set();
+  if (selection?.kind === 'node') hot.add(selection.id);
   if (selection?.kind === 'room') {
     const r = getRoom(selection.id);
     if (r) {
@@ -848,6 +865,7 @@ let down = null;
 
 canvas.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
+  if (cornerPreview) select(null); // an unconfirmed corner preview is dropped first
   down = { x: e.clientX, y: e.clientY };
   setRay(e);
   const p = floorPoint();
@@ -910,7 +928,7 @@ function hover(e) {
 function endPointer(e) {
   if (tool !== 'select') { drawUp(e); controls.enabled = true; down = null; return; }
   if (drag) {
-    const { moved, kind } = drag;
+    const { moved, kind, id } = drag;
     drag = null;
     controls.enabled = true;
     showHover();
@@ -919,7 +937,7 @@ function endPointer(e) {
       commit();
       renderProps(); renderList(); renderPlanTab();
       updateOverlay();
-    }
+    } else if (kind === 'node') select({ kind: 'node', id }); // a click on a corner: show its options
     down = null;
     return;
   }
@@ -1165,7 +1183,35 @@ function drawUp(e) {
 
 // ---------- actions ----------
 
+// Corner rounding shows a live preview; leaving the corner without confirming undoes it.
+let cornerPreview = null; // { id, base }
+
+function previewCorner(r) {
+  if (!cornerPreview) cornerPreview = { id: selection.id, base: structuredClone(state) };
+  state = structuredClone(cornerPreview.base);
+  if (r >= 5) Plan.roundCorner(state, cornerPreview.id, r);
+  rebuildGeometry();
+}
+
+function confirmCorner(r) {
+  const base = cornerPreview?.base || structuredClone(state);
+  const id = cornerPreview?.id || selection.id;
+  cornerPreview = null;
+  state = structuredClone(base);
+  if (!Plan.roundCorner(state, id, r)) { state = base; toast('Raggio troppo piccolo o angolo non arrotondabile.'); return; }
+  selection = null;
+  rebuildGeometry();
+  commit();
+  afterPlanChange();
+  updateOverlay();
+}
+
 function select(sel) {
+  if (cornerPreview && sel?.id !== cornerPreview.id) {
+    state = cornerPreview.base;
+    cornerPreview = null;
+    rebuildGeometry();
+  }
   selection = sel;
   updateOverlay();
   renderProps();
@@ -1283,6 +1329,7 @@ function afterPlanChange() {
 }
 
 function startProject(data, guided) {
+  cornerPreview = null;
   state = normalize(structuredClone(data));
   selection = null;
   view3d = null;
@@ -1416,6 +1463,30 @@ function renderProps() {
         <button data-act="dup">Duplica <kbd>Ctrl D</kbd></button>
         <button data-act="del" class="danger">Elimina <kbd>Canc</kbd></button>
       </div>`;
+  } else if (selection.kind === 'node') {
+    const info = Plan.cornerInfo(cornerPreview?.base || state, selection.id);
+    const n = state.walls.filter(w => w.a === selection.id || w.b === selection.id).length;
+    const start = Math.min(60, info.maxR || 0);
+    el.innerHTML = `
+      <div class="props-head">
+        <div class="room-ico">◜</div>
+        <div><h3>Angolo</h3><small>${info.angle ? `${info.angle}° tra due muri` : `${n} muri collegati`}</small></div>
+        <button class="x" data-act="close" title="Chiudi (Esc)">×</button>
+      </div>
+      ${info.ok ? `
+        <div class="field"><span>Raggio della curva <small>(max ${info.maxR} cm)</small></span>
+          <div class="row curve-row">
+            <input type="range" data-k="radius" min="5" max="${info.maxR}" step="5" value="${start}">
+            <div class="unit"><input type="number" data-k="radius" min="5" max="${info.maxR}" step="5" value="${start}"><em>cm</em></div>
+          </div>
+        </div>
+        <div class="row quick">${[30, 60, 100, 150].filter(v => v <= info.maxR).map(v => `<button data-radius="${v}">${v} cm</button>`).join('')}</div>
+        <p class="hint">Muovi il cursore per vedere l’anteprima, poi conferma. Per spostare l’angolo trascina il pallino.</p>
+        <div class="actions"><button data-act="round" class="primary">◜ Arrotonda angolo</button></div>`
+      : `<p class="hint">${info.reason} Puoi trascinare il pallino per spostare l’angolo.</p>`}`;
+    el.hidden = false;
+    if (info.ok && !cornerPreview) previewCorner(start);
+    return;
   } else if (selection.kind === 'wall') {
     const w = getWall(selection.id);
     if (!w) { el.hidden = true; return; }
@@ -1520,6 +1591,11 @@ $('#props').addEventListener('change', e => {
 $('#props').addEventListener('input', e => {
   const k = e.target.dataset.k;
   if (k === 'color') applyProp('color', e.target.value, true);
+  if (k === 'radius') {
+    previewCorner(parseFloat(e.target.value));
+    $('#props').querySelectorAll('[data-k=radius]').forEach(i => { if (i !== e.target) i.value = e.target.value; });
+    return;
+  }
   if (k === 'bulge') {
     applyProp('bulge', e.target.value, true);
     $('#props').querySelectorAll('[data-k=bulge]').forEach(i => { if (i !== e.target) i.value = e.target.value; });
@@ -1528,7 +1604,11 @@ $('#props').addEventListener('input', e => {
 $('#props').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b) return;
-  if (b.dataset.rot) rotateSelection(+b.dataset.rot);
+  if (b.dataset.radius) {
+    previewCorner(+b.dataset.radius);
+    $('#props').querySelectorAll('[data-k=radius]').forEach(i => { i.value = b.dataset.radius; });
+  } else if (b.dataset.act === 'round') confirmCorner(parseFloat($('#props input[type=number][data-k=radius]').value));
+  else if (b.dataset.rot) rotateSelection(+b.dataset.rot);
   else if (b.dataset.color) applyProp('color', b.dataset.color);
   else if (b.dataset.wtype) {
     const w = getWall(selection.id);
@@ -1590,6 +1670,7 @@ function renderPlanTab() {
       <div class="presets">
         <button data-act="wizard" class="primary-soft">✦ Crea la tua casa…</button>
         <button data-act="blank">Foglio bianco (disegno da zero)</button>
+        ${loadBackup() ? '<button data-act="backup" title="Il progetto come era salvato quando hai aperto la pagina">↺ Torna a com’era all’apertura</button>' : ''}
         ${PRESETS.filter(p => p.id !== 'vuoto').map(p => `<button data-preset="${p.id}">${p.name}</button>`).join('')}
       </div>
     </div>`;
@@ -1601,6 +1682,10 @@ $('#tab-plan').addEventListener('click', e => {
   const tb = e.target.closest('[data-tool]');
   if (tb) { setTool(tool === tb.dataset.tool ? 'select' : tb.dataset.tool); renderPlanTab(); return; }
   if (e.target.closest('[data-act=wizard]')) wizard.open();
+  if (e.target.closest('[data-act=backup]') && confirm('Tornare al progetto com’era quando hai aperto la pagina? Puoi annullare con Ctrl+Z.')) {
+    const b = loadBackup();
+    if (b) startProject(b, false);
+  }
   if (e.target.closest('[data-act=blank]') && confirm('Cominciare da un foglio bianco? Il progetto attuale verrà sostituito (puoi annullare con Ctrl+Z).')) {
     startProject({ name: 'Nuovo progetto', nodes: [], walls: [], rooms: [], items: [] }, false);
     setTool('wall');
@@ -1763,7 +1848,15 @@ const wizard = createWizard({
 });
 
 const saved = loadSaved();
-state = normalize(saved || structuredClone(PRESETS[0].data));
+let savedBroken = !!saved && !saved.data;
+try {
+  state = normalize(saved?.data || structuredClone(PRESETS[0].data));
+} catch (err) {
+  console.error('Saved project could not be opened', err);
+  keepUnreadable(saved.raw);
+  savedBroken = true;
+  state = normalize(structuredClone(PRESETS[0].data));
+}
 makeControls();
 new ResizeObserver(resize).observe(viewport);
 resize();
@@ -1774,7 +1867,8 @@ commit();
 rebuildRooms();
 renderPlanTab();
 makeThumbs();
-if (!saved) wizard.open();
+if (savedBroken) toast('Il progetto salvato non si apre: ne ho conservato una copia nel browser, non è stato cancellato.');
+else if (!saved) wizard.open();
 
 renderer.setAnimationLoop(() => {
   controls.update();
@@ -1785,6 +1879,6 @@ renderer.setAnimationLoop(() => {
 
 // Handy for debugging from the browser console.
 window.planner = {
-  get state() { return state; }, get rooms() { return rooms; }, get camera() { return camera; },
+  get state() { return state; }, get rooms() { return rooms; }, get camera() { return camera; }, scene,
   select, addItem, setView, setTab, setTool, undo, wizard, startProject, findConflicts,
 };
