@@ -425,7 +425,8 @@ export function syncRooms(st, prune = false) {
 }
 
 const KITCHEN = ['kitchenBase', 'sinkUnit', 'hobUnit', 'fridge'];
-const SOFA = ['sofa3', 'sofa2', 'armchair', 'tvStand'];
+const SOFA = ['sofa3', 'sofa2', 'armchair', 'tvStand', 'cornerSofa', 'tvUnit'];
+const HALL = ['shoeCabinet', 'coatRack', 'coatStand', 'entryBench', 'umbrellaStand'];
 
 function autoLabel(st, rooms) {
   const faceCount = new Map();
@@ -471,6 +472,7 @@ function guessType(st, r, { byId, faceCount, largest }) {
   if (has(...SOFA)) return 'living';
   if (has('desk', 'officeChair')) return 'study';
   if (has('washer') && m2 < 8) return 'laundry';
+  if (has(...HALL) && m2 < 12) return 'entrance';
   const per = G.perimeter(r.pts);
   const width = (2 * r.area) / per;
   const elongated = (per * per) / r.area > 24;

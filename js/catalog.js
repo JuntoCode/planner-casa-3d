@@ -87,7 +87,7 @@ const B = {
     for (const s of [-1, 1]) box(g, arm, 0.55, d, c, s * (w / 2 - arm / 2), 0.08, 0);
     box(g, w - 2 * arm, h - 0.08, 0.2, c, 0, 0.08, -d / 2 + 0.1);
     const inner = w - 2 * arm;
-    const n = seats ?? Math.max(1, Math.round(inner / 0.65));
+    const n = typeof seats === 'number' ? seats : Math.max(1, Math.round(inner / 0.65)); // 6th arg is the item when built from the catalog
     const cw = inner / n;
     for (let i = 0; i < n; i++) {
       const x = -inner / 2 + cw * i + cw / 2;
@@ -409,6 +409,8 @@ Object.assign(B, decorBuilders({ box, cyl, mat, shade, mulberry, def: it => TYPE
 
 // Defaults in cm. `elev` = height from the floor; `opening` = cut into a wall.
 // `wallMount` = hangs on a wall (turns its back to it); `ceiling` = hangs from the ceiling;
+// `surface` = has a top to put things on (true: at its height, or a number in cm);
+// `onTop` = small piece that lands on the furniture under it;
 // `outdoor` = may stand outside the rooms; `hit` = share of the footprint that blocks
 // walking (trunks, poles) or 'posts' (only the four corners).
 export const CATALOG = [
@@ -416,25 +418,57 @@ export const CATALOG = [
     { type: 'sofa3', name: 'Divano 3 posti', build: 'sofa', w: 220, d: 95, h: 85, color: '#7d8a96' },
     { type: 'sofa2', name: 'Divano 2 posti', build: 'sofa', w: 165, d: 90, h: 85, color: '#a39382' },
     { type: 'armchair', name: 'Poltrona', build: 'armchair', w: 85, d: 85, h: 85, color: '#b8735a' },
-    { type: 'coffeeTable', name: 'Tavolino', build: 'coffeeTable', w: 100, d: 55, h: 42, color: '#c9a57a' },
-    { type: 'tvStand', name: 'Mobile TV', build: 'tvStand', w: 160, d: 40, h: 45, color: '#f2f0eb' },
-    { type: 'bookshelf', name: 'Libreria', build: 'bookshelf', w: 80, d: 30, h: 200, color: '#e8dcc6' },
+    { type: 'coffeeTable', name: 'Tavolino', build: 'coffeeTable', w: 100, d: 55, h: 42, color: '#c9a57a', surface: true },
+    { type: 'tvStand', name: 'Mobile TV', build: 'tvStand', w: 160, d: 40, h: 45, color: '#f2f0eb', surface: true },
+    { type: 'bookshelf', name: 'Libreria', build: 'bookshelf', w: 80, d: 30, h: 200, color: '#e8dcc6', surface: true },
+    { type: 'cornerSofa', name: 'Divano angolare', build: 'cornerSofa', w: 280, d: 170, h: 85, color: '#7d8a96' },
+    { type: 'sideboard', name: 'Madia', build: 'sideboard', w: 180, d: 45, h: 80, color: 'wood:oak', surface: true },
+    { type: 'tvUnit', name: 'Parete attrezzata TV', build: 'tvUnit', w: 300, d: 45, h: 200, color: '#f2f0eb', surface: 45 },
+    { type: 'displayCabinet', name: 'Vetrina', build: 'displayCabinet', w: 90, d: 40, h: 190, color: 'wood:walnut', surface: true },
+    { type: 'cubeShelf', name: 'Libreria a cubi', build: 'cubeShelf', w: 147, d: 39, h: 147, color: '#f2f0eb', surface: true },
+    { type: 'floatingShelves', name: 'Mensole sfalsate', build: 'floatingShelves', w: 120, d: 20, h: 80, elev: 120, color: 'wood:oak', wallMount: true },
+    { type: 'wallCupboard', name: 'Pensile soggiorno', build: 'wallCupboard', w: 120, d: 35, h: 40, elev: 150, color: '#f2f0eb', wallMount: true },
+    { type: 'sideTable', name: 'Tavolino laterale', build: 'sideTable', w: 45, d: 45, h: 55, color: 'wood:walnut', surface: true },
+    { type: 'pouf', name: 'Pouf', build: 'pouf', w: 50, d: 50, h: 42, color: '#d9b44a' },
+    { type: 'beanBag', name: 'Poltrona sacco', build: 'beanBag', w: 85, d: 85, h: 75, color: '#56704f' },
+    { type: 'fireplace', name: 'Camino', build: 'fireplace', w: 140, d: 40, h: 110, color: '#efebe4', surface: true },
+    { type: 'curtains', name: 'Tende', build: 'curtains', w: 180, d: 15, h: 250, elev: 10, color: '#e9e1d3', wallMount: true, noCollide: true },
+    { type: 'radiator', name: 'Termosifone', build: 'radiator', w: 80, d: 10, h: 60, elev: 12, color: '#ffffff', wallMount: true },
+  ] },
+  { cat: 'Ingresso', items: [
+    { type: 'shoeCabinet', name: 'Scarpiera', build: 'shoeCabinet', w: 80, d: 26, h: 110, color: '#f2f0eb', surface: true },
+    { type: 'entryBench', name: 'Panca portascarpe', build: 'entryBench', w: 100, d: 35, h: 48, color: 'wood:oak', surface: true },
+    { type: 'consoleTable', name: 'Consolle', build: 'consoleTable', w: 110, d: 35, h: 80, color: 'wood:walnut', surface: true },
+    { type: 'coatRack', name: 'Appendiabiti a muro', build: 'coatRack', w: 80, d: 30, h: 30, elev: 160, color: 'wood:oak', wallMount: true, noCollide: true },
+    { type: 'coatStand', name: 'Appendiabiti a stelo', build: 'coatStand', w: 45, d: 45, h: 180, color: '#2b2b2b' },
+    { type: 'umbrellaStand', name: 'Portaombrelli', build: 'umbrellaStand', w: 25, d: 25, h: 50, color: '#5b5f63' },
+  ] },
+  { cat: 'Da appoggiare', items: [
+    { type: 'booksStack', name: 'Pila di libri', build: 'booksStack', w: 25, d: 18, h: 12, color: '#2f4a6b', onTop: true, prefers: ['coffeeTable', 'nightstand', 'sideboard', 'sideTable', 'desk'] },
+    { type: 'candles', name: 'Candele', build: 'candles', w: 30, d: 15, h: 22, color: '#f8f4ea', onTop: true, prefers: ['coffeeTable', 'table', 'sideboard', 'fireplace'] },
+    { type: 'photoFrame', name: 'Cornice foto', build: 'photoFrame', w: 18, d: 10, h: 23, color: '#2b2b2b', onTop: true, prefers: ['sideboard', 'consoleTable', 'nightstand', 'fireplace', 'dresser'] },
+    { type: 'vase', name: 'Vaso decorativo', build: 'vase', w: 18, d: 18, h: 35, color: '#c56b45', onTop: true, prefers: ['sideboard', 'consoleTable', 'fireplace', 'shoeCabinet', 'displayCabinet'] },
+    { type: 'fruitBowl', name: 'Fruttiera', build: 'fruitBowl', w: 30, d: 30, h: 12, color: '#f2f0eb', onTop: true, prefers: ['table', 'roundTable', 'kitchenBase'] },
+    { type: 'speaker', name: 'Cassa audio', build: 'speaker', w: 18, d: 18, h: 30, color: '#3b3f45', onTop: true, prefers: ['tvStand', 'tvUnit', 'sideboard', 'bookshelf'] },
+    { type: 'recordPlayer', name: 'Giradischi', build: 'recordPlayer', w: 45, d: 35, h: 13, color: 'wood:walnut', onTop: true, prefers: ['sideboard', 'tvStand', 'cubeShelf'] },
+    { type: 'microwave', name: 'Microonde', build: 'microwave', w: 50, d: 38, h: 30, color: '#2b2b2b', onTop: true, prefers: ['kitchenBase'] },
+    { type: 'coffeeMachine', name: 'Macchina del caffè', build: 'coffeeMachine', w: 25, d: 35, h: 35, color: '#c0c4c6', onTop: true, prefers: ['kitchenBase'] },
   ] },
   { cat: 'Pranzo', items: [
-    { type: 'table', name: 'Tavolo', build: 'table', w: 140, d: 80, h: 75, color: '#c9a57a', openBelow: true },
-    { type: 'roundTable', name: 'Tavolo rotondo', build: 'roundTable', w: 100, d: 100, h: 75, color: '#f2f0eb', openBelow: true },
+    { type: 'table', name: 'Tavolo', build: 'table', w: 140, d: 80, h: 75, color: '#c9a57a', openBelow: true, surface: true },
+    { type: 'roundTable', name: 'Tavolo rotondo', build: 'roundTable', w: 100, d: 100, h: 75, color: '#f2f0eb', openBelow: true, surface: true },
     { type: 'chair', name: 'Sedia', build: 'chair', w: 45, d: 50, h: 85, color: '#c9a57a', tucks: true },
   ] },
   { cat: 'Camera', items: [
     { type: 'bed2', name: 'Letto matrimoniale', build: 'bed', w: 160, d: 205, h: 100, color: '#d8cdbd' },
     { type: 'bed1', name: 'Letto singolo', build: 'bed', w: 90, d: 205, h: 90, color: '#d8cdbd' },
     { type: 'wardrobe', name: 'Armadio', build: 'wardrobe', w: 200, d: 60, h: 236, color: '#f2f0eb' },
-    { type: 'nightstand', name: 'Comodino', build: 'nightstand', w: 45, d: 40, h: 50, color: '#c9a57a' },
-    { type: 'dresser', name: 'Cassettiera', build: 'dresser', w: 80, d: 48, h: 80, color: '#f2f0eb' },
+    { type: 'nightstand', name: 'Comodino', build: 'nightstand', w: 45, d: 40, h: 50, color: '#c9a57a', surface: true },
+    { type: 'dresser', name: 'Cassettiera', build: 'dresser', w: 80, d: 48, h: 80, color: '#f2f0eb', surface: true },
   ] },
   { cat: 'Cucina', items: [
-    { type: 'kitchenBase', name: 'Base cucina', build: 'kitchenBase', w: 60, d: 62, h: 90, color: '#e9e6df' },
-    { type: 'sinkUnit', name: 'Lavello', build: 'sinkUnit', w: 80, d: 62, h: 90, color: '#e9e6df' },
+    { type: 'kitchenBase', name: 'Base cucina', build: 'kitchenBase', w: 60, d: 62, h: 90, color: '#e9e6df', surface: true },
+    { type: 'sinkUnit', name: 'Lavello', build: 'sinkUnit', w: 80, d: 62, h: 90, color: '#e9e6df', surface: true },
     { type: 'hobUnit', name: 'Piano cottura + forno', build: 'hobUnit', w: 60, d: 62, h: 90, color: '#e9e6df' },
     { type: 'wallCabinet', name: 'Pensile', build: 'wallCabinet', w: 60, d: 35, h: 70, elev: 145, color: '#e9e6df' },
     { type: 'hoodCabinet', name: 'Pensile con cappa', build: 'hoodCabinet', w: 60, d: 35, h: 70, elev: 145, color: '#e9e6df' },
@@ -445,22 +479,22 @@ export const CATALOG = [
   { cat: 'Bagno', items: [
     { type: 'toilet', name: 'WC', build: 'toilet', w: 38, d: 60, h: 80, color: '#ffffff' },
     { type: 'bidet', name: 'Bidet', build: 'bidet', w: 38, d: 55, h: 40, color: '#ffffff' },
-    { type: 'washbasin', name: 'Lavabo con mobile', build: 'washbasin', w: 60, d: 46, h: 85, color: '#8a7560' },
+    { type: 'washbasin', name: 'Lavabo con mobile', build: 'washbasin', w: 60, d: 46, h: 85, color: '#8a7560', surface: true },
     { type: 'shower', name: 'Doccia', build: 'shower', w: 90, d: 90, h: 200, color: '#dfefff' },
     { type: 'bathtub', name: 'Vasca', build: 'bathtub', w: 170, d: 75, h: 55, color: '#ffffff' },
-    { type: 'washer', name: 'Lavatrice', build: 'washer', w: 60, d: 60, h: 85, color: '#f2f3f4' },
+    { type: 'washer', name: 'Lavatrice', build: 'washer', w: 60, d: 60, h: 85, color: '#f2f3f4', surface: true },
     { type: 'tilesSubway', name: 'Rivestimento piastrelle', build: 'tilePanel', art: 'subway', w: 120, d: 1, h: 200, color: '#ffffff', wallMount: true, noCollide: true },
     { type: 'tilesMosaic', name: 'Rivestimento mosaico', build: 'tilePanel', art: 'wallMosaic', w: 120, d: 1, h: 200, color: '#ffffff', wallMount: true, noCollide: true },
     { type: 'tilesHex', name: 'Rivestimento esagonale', build: 'tilePanel', art: 'wallHex', w: 120, d: 1, h: 120, color: '#ffffff', wallMount: true, noCollide: true },
   ] },
   { cat: 'Ufficio', items: [
-    { type: 'desk', name: 'Scrivania', build: 'desk', w: 140, d: 70, h: 75, color: '#f2f0eb', openBelow: true },
+    { type: 'desk', name: 'Scrivania', build: 'desk', w: 140, d: 70, h: 75, color: '#f2f0eb', openBelow: true, surface: true },
     { type: 'officeChair', name: 'Sedia da ufficio', build: 'officeChair', w: 60, d: 60, h: 105, color: '#3b3f45', tucks: true },
   ] },
   { cat: 'Tecnologia', items: [
-    { type: 'pc', name: 'PC (monitor e tastiera)', build: 'pc', w: 60, d: 35, h: 45, elev: 75, color: '#2b2b2b' },
-    { type: 'pcTower', name: 'Case PC', build: 'pcTower', w: 21, d: 45, h: 46, color: '#2b2b2b' },
-    { type: 'laptop', name: 'Portatile', build: 'laptop', w: 34, d: 24, h: 22, elev: 75, color: '#b9c0c4' },
+    { type: 'pc', name: 'PC (monitor e tastiera)', build: 'pc', w: 60, d: 35, h: 45, elev: 75, color: '#2b2b2b', onTop: true, prefers: ['desk'] },
+    { type: 'pcTower', name: 'Case PC', build: 'pcTower', w: 21, d: 45, h: 46, color: '#2b2b2b', onTop: true, prefers: ['desk'] },
+    { type: 'laptop', name: 'Portatile', build: 'laptop', w: 34, d: 24, h: 22, elev: 75, color: '#b9c0c4', onTop: true, prefers: ['desk', 'table', 'coffeeTable'] },
     { type: 'tvWall', name: 'TV a parete', build: 'tvWall', w: 125, d: 5, h: 72, elev: 95, color: '#1d1d1f', wallMount: true },
   ] },
   { cat: 'Luci', items: [
@@ -472,7 +506,7 @@ export const CATALOG = [
     { type: 'lamp', name: 'Lampada da terra', build: 'lamp', w: 40, d: 40, h: 160, color: '#f3ead6' },
     { type: 'arcLamp', name: 'Lampada ad arco', build: 'arcLamp', w: 150, d: 40, h: 200, color: '#2b2b2b', hit: 0.25 },
     { type: 'tripodLamp', name: 'Lampada treppiede', build: 'tripodLamp', w: 55, d: 55, h: 155, color: '#e9e1d3' },
-    { type: 'tableLamp', name: 'Lampada da tavolo', build: 'tableLamp', w: 30, d: 30, h: 45, elev: 50, color: '#d9b44a' },
+    { type: 'tableLamp', name: 'Lampada da tavolo', build: 'tableLamp', w: 30, d: 30, h: 45, elev: 50, color: '#d9b44a', onTop: true, prefers: ['nightstand', 'desk', 'sideTable', 'consoleTable', 'sideboard'] },
     { type: 'fairy', name: 'Luci fairy', build: 'fairyLights', w: 200, d: 4, h: 45, elev: 165, color: '#ffd27a', wallMount: true, noCollide: true },
     { type: 'fairyCurtain', name: 'Tenda luminosa', build: 'fairyLights', mode: 'curtain', w: 150, d: 4, h: 180, elev: 40, color: '#ffe6a8', wallMount: true, noCollide: true },
   ] },
@@ -484,8 +518,8 @@ export const CATALOG = [
     { type: 'mirror', name: 'Specchio', build: 'mirror', w: 60, d: 3, h: 90, elev: 110, color: 'wood:oak', wallMount: true, noCollide: true },
     { type: 'mirrorRound', name: 'Specchio rotondo', build: 'mirror', round: true, w: 60, d: 3, h: 60, elev: 130, color: '#c9a24a', wallMount: true, noCollide: true },
     { type: 'clock', name: 'Orologio da parete', build: 'clock', w: 35, d: 5, h: 35, elev: 180, color: '#2b2b2b', wallMount: true, noCollide: true },
-    { type: 'wallShelf', name: 'Mensola con libri', build: 'wallShelf', w: 80, d: 22, h: 30, elev: 150, color: 'wood:oak', wallMount: true },
-    { type: 'flowers', name: 'Vaso con fiori', build: 'flowers', w: 25, d: 25, h: 50, elev: 75, color: '#dfe7ea' },
+    { type: 'wallShelf', name: 'Mensola con libri', build: 'wallShelf', w: 80, d: 22, h: 30, elev: 150, color: 'wood:oak', wallMount: true, surface: 2.5 },
+    { type: 'flowers', name: 'Vaso con fiori', build: 'flowers', w: 25, d: 25, h: 50, elev: 75, color: '#dfe7ea', onTop: true, prefers: ['table', 'roundTable', 'coffeeTable', 'sideboard', 'consoleTable', 'sideTable'] },
   ] },
   { cat: 'Tappeti', items: [
     { type: 'rug', name: 'Tappeto', build: 'rug', w: 200, d: 140, h: 1, color: '#9c8f7c', noCollide: true },
@@ -505,8 +539,8 @@ export const CATALOG = [
     { type: 'oliveIndoor', name: 'Ulivo in vaso', build: 'indoorTree', leaf: 'olive', w: 70, d: 70, h: 170, color: '#e9e1d3' },
     { type: 'fern', name: 'Felce', build: 'fern', w: 60, d: 60, h: 65, color: '#5b5f63' },
     { type: 'cactus', name: 'Cactus', build: 'cactus', w: 35, d: 35, h: 90, color: '#c56b45' },
-    { type: 'succulents', name: 'Piante grasse', build: 'succulents', w: 30, d: 30, h: 15, elev: 75, color: '#e9e1d3' },
-    { type: 'bonsai', name: 'Bonsai', build: 'bonsai', w: 35, d: 25, h: 35, elev: 75, color: '#3b3f45' },
+    { type: 'succulents', name: 'Piante grasse', build: 'succulents', w: 30, d: 30, h: 15, elev: 75, color: '#e9e1d3', onTop: true, prefers: ['desk', 'bookshelf', 'sideboard', 'coffeeTable'] },
+    { type: 'bonsai', name: 'Bonsai', build: 'bonsai', w: 35, d: 25, h: 35, elev: 75, color: '#3b3f45', onTop: true, prefers: ['desk', 'sideboard', 'consoleTable'] },
     { type: 'hangingPlant', name: 'Pianta pendente', build: 'hangingPlant', w: 45, d: 45, h: 110, color: '#f2f0eb', ceiling: true },
   ] },
   { cat: 'Musica', items: [
@@ -515,9 +549,9 @@ export const CATALOG = [
     { type: 'eGuitarWall', name: 'Chitarra elettrica a parete', build: 'guitarWall', electric: true, w: 35, d: 10, h: 100, elev: 95, color: '#8b2f2f', wallMount: true },
     { type: 'eGuitarStand', name: 'Chitarra elettrica su supporto', build: 'guitarStand', electric: true, w: 38, d: 45, h: 102, color: '#2f4a6b' },
     { type: 'pianoDigital', name: 'Pianoforte digitale', build: 'pianoDigital', w: 135, d: 35, h: 90, color: '#2b2b2b' },
-    { type: 'piano', name: 'Pianoforte verticale', build: 'pianoUpright', w: 150, d: 60, h: 125, color: '#1d1d1f' },
+    { type: 'piano', name: 'Pianoforte verticale', build: 'pianoUpright', w: 150, d: 60, h: 125, color: '#1d1d1f', surface: true },
     { type: 'drums', name: 'Batteria', build: 'drums', w: 160, d: 130, h: 120, color: '#8b2f2f' },
-    { type: 'amp', name: 'Amplificatore', build: 'amp', w: 50, d: 26, h: 45, color: '#2b2b2b' },
+    { type: 'amp', name: 'Amplificatore', build: 'amp', w: 50, d: 26, h: 45, color: '#2b2b2b', onTop: true, prefers: ['tvStand', 'sideboard'] },
   ] },
   { cat: 'Animali', items: [
     { type: 'dogBed', name: 'Cuccia cane', build: 'petBed', w: 90, d: 70, h: 22, color: '#7d8a96' },
@@ -536,7 +570,7 @@ export const CATALOG = [
     { type: 'lavender', name: 'Lavanda in fioriera', build: 'lavender', w: 100, d: 40, h: 60, color: '#b5674a', outdoor: true },
     { type: 'flowerBed', name: 'Aiuola fiorita', build: 'flowerBed', w: 200, d: 70, h: 30, color: '#b5674a', outdoor: true },
     { type: 'raisedBed', name: 'Orto rialzato', build: 'raisedBed', w: 120, d: 80, h: 45, color: 'wood:oak', outdoor: true },
-    { type: 'gardenTable', name: 'Tavolo da giardino', build: 'table', w: 160, d: 90, h: 75, color: '#5b5f63', outdoor: true, openBelow: true },
+    { type: 'gardenTable', name: 'Tavolo da giardino', build: 'table', w: 160, d: 90, h: 75, color: '#5b5f63', outdoor: true, openBelow: true, surface: true },
     { type: 'gardenChair', name: 'Sedia da giardino', build: 'chair', w: 50, d: 52, h: 85, color: '#56704f', outdoor: true, tucks: true },
     { type: 'sunLounger', name: 'Lettino prendisole', build: 'sunLounger', w: 70, d: 195, h: 40, color: '#f2f0eb', outdoor: true },
     { type: 'parasol', name: 'Ombrellone', build: 'parasol', w: 260, d: 260, h: 245, color: '#e9e1d3', outdoor: true, hit: 0.15 },
@@ -585,6 +619,8 @@ const STYLE_GROUP = {
   kitchenBase: 'kitchen', sinkUnit: 'kitchen', hobUnit: 'kitchen', wallCabinet: 'kitchen', hoodCabinet: 'kitchen',
   sofa3: 'soft', sofa2: 'soft', officeChair: 'soft', armchair: 'accent', bed2: 'bed', bed1: 'bed',
   rug: 'rug', door: 'door', door90: 'door',
+  sideboard: 'wood', sideTable: 'wood', consoleTable: 'wood', entryBench: 'wood', displayCabinet: 'wood',
+  tvUnit: 'cabinet', cubeShelf: 'cabinet', shoeCabinet: 'cabinet', wallCupboard: 'cabinet', cornerSofa: 'soft', pouf: 'accent',
 };
 export const STYLES = {
   legno: { label: 'Legno naturale', wood: 'wood:oak', cabinet: 'wood:oak', kitchen: 'wood:oak', soft: '#a39382', accent: '#b8735a', bed: 'wood:oak', rug: '#9c8f7c', door: 'wood:oak' },

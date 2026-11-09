@@ -18,7 +18,11 @@ senza build: HTML, CSS e JavaScript modules.
   un muro; scrivi le misure dei lati; dividi o elimina un muro.
 - **Porte e finestre** (anche portefinestre e vetrate scorrevoli): si agganciano ai muri e li tagliano;
   la porta mostra l'arco di apertura.
-- **Mobili e oggetti** (oltre 100): soggiorno, camera, cucina, bagno, ufficio, più
+- **Mobili e oggetti** (oltre 140): soggiorno, camera, cucina, bagno, ufficio, più
+  - **soggiorno**: divano angolare, madia, parete attrezzata TV, vetrina, libreria a cubi, mensole sfalsate,
+    pensile, tavolino laterale, pouf, poltrona sacco, camino, tende, termosifone;
+  - **ingresso**: scarpiera, panca portascarpe, consolle, appendiabiti a muro e a stelo, portaombrelli;
+  - **da appoggiare**: libri, candele, cornice, vaso, fruttiera, cassa audio, giradischi, microonde, macchina del caffè;
   - **decorazioni**: quadri, poster, arazzo mandala, specchi, orologio, mensola con libri, vaso di fiori;
   - **tappeti**: persiano, berbero, kilim, passatoia, rotondi;
   - **luci**: lampadario, sospensioni, plafoniera, lampade da terra, ad arco, treppiede, da tavolo, luci fairy;
@@ -28,6 +32,9 @@ senza build: HTML, CSS e JavaScript modules.
   - **rivestimenti** a piastrelle per bagno e cucina.
 
   Quadri, specchi e TV si appendono da soli al muro più vicino; i lampadari si agganciano al soffitto.
+  PC, portatile, lampade, libri e gli altri oggetti piccoli si posano da soli sul mobile adatto (il PC sulla
+  scrivania, il microonde in cucina) e salgono sul piano su cui li trascini (`Alt` per lasciarli a terra);
+  spostando un mobile si porta dietro quello che ha sopra.
   Dimensioni e colore modificabili, rotazione, aggancio alla griglia e ai muri.
 - **Giardino e patio**: lo strumento *Giardino* disegna una staccionata (o siepe) anche tutto intorno
   alla casa, *Patio* un cordolo per una zona pavimentata. In giardino: alberi, ulivo, cipresso,

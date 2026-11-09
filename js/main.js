@@ -909,6 +909,7 @@ function findConflicts() {
       const A = list[i], B = list[j];
       if (A.elev >= B.elev + B.h || B.elev >= A.elev + A.h) continue;
       if (tucksUnder(A, B) || tucksUnder(B, A)) continue; // a chair pushed under a table is fine
+      if (restsOn(A, B) || restsOn(B, A)) continue; // a lamp on the TV unit's low shelf
       if (overlap(polys[i], polys[j])) { bad.add(A.id); bad.add(B.id); }
     }
     const ok = polys[i].every(p => (TYPES[list[i].type].outdoor || rooms.some(r => G.inRoom(p[0], p[1], r))) && segs.every(([a, b, h]) => G.segDist(p, a, b).d >= h - 0.6));
@@ -1151,6 +1152,75 @@ function snapToWalls(it, x, z) {
   return [x, z];
 }
 
+// ---------- things that rest on furniture ----------
+// `surface` furniture (desks, tables, sideboards…) has a top other pieces can stand on;
+// `onTop` pieces (PC, lamp, books…) land on the highest top under them, or on the floor.
+function surfaceTop(o) {
+  const s = TYPES[o.type].surface;
+  if (s == null || s === false) return null;
+  return o.elev + (s === true ? o.h : s);
+}
+
+function insideItem(o, x, z) {
+  const th = THREE.MathUtils.degToRad(o.rot), c = Math.cos(th), sn = Math.sin(th);
+  const dx = x - o.x, dz = z - o.z;
+  return Math.abs(c * dx - sn * dz) <= o.w / 2 && Math.abs(sn * dx + c * dz) <= o.d / 2;
+}
+
+function supportUnder(it, x, z) {
+  let best = null;
+  for (const o of state.items) {
+    if (o.id === it.id || TYPES[o.type].onTop) continue;
+    const top = surfaceTop(o);
+    if (top == null || !insideItem(o, x, z)) continue;
+    if (!best || top > best.top) best = { item: o, top };
+  }
+  return best;
+}
+
+// Tops you can drag things onto, but where nothing should land by itself.
+const NO_AUTO_REST = new Set(['washbasin', 'sinkUnit', 'washer', 'hobUnit']);
+
+// A new piece goes on the closest free top (towards its back), in this room first.
+function restOnSurface(it, p) {
+  const room = roomAt(p);
+  const prefers = TYPES[it.type].prefers || [];
+  // The piece's favourite furniture first (microwave → kitchen), then this room, then the nearest.
+  const cost = o => (prefers.length && !prefers.includes(o.type) ? 2e6 : 0) + (room && !G.inRoom(o.x, o.z, room) ? 1e6 : 0) + Math.hypot(o.x - p.x, o.z - p.z);
+  const tops = state.items
+    .filter(o => !TYPES[o.type].onTop && !NO_AUTO_REST.has(o.type) && surfaceTop(o) != null && surfaceTop(o) <= 140 && o.w >= it.w && o.d >= it.d * 0.8)
+    .sort((a, b) => cost(a) - cost(b));
+  for (const o of tops) {
+    const top = surfaceTop(o);
+    const th = THREE.MathUtils.degToRad(o.rot), ax = [Math.cos(th), -Math.sin(th)], az = [Math.sin(th), Math.cos(th)];
+    const room2 = o.d - it.d;
+    const rows = room2 > 10 ? [-(room2 / 2 - 3), 0, room2 / 2 - 3] : [0]; // back, middle, front
+    for (const v of rows) {
+      for (let k = 0; k <= o.w; k += 5) {
+        for (const u of k ? [k, -k] : [0]) {
+          if (Math.abs(u) + it.w / 2 > o.w / 2) continue;
+          const x = o.x + ax[0] * u + az[0] * v, z = o.z + ax[1] * u + az[1] * v;
+          const cand = corners({ ...it, x, z, rot: o.rot }, -1); // keep a small gap
+          const busy = state.items.some(q => q.id !== it.id && TYPES[q.type].onTop && Math.abs(q.elev - top) < 1 && overlap(corners(q, -1), cand));
+          if (busy) continue;
+          Object.assign(it, { x: Math.round(x), z: Math.round(z), rot: o.rot, elev: top });
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+const restsOn = (a, b) => TYPES[a.type].onTop && surfaceTop(b) != null && Math.abs(a.elev - surfaceTop(b)) < 1 && insideItem(b, a.x, a.z);
+
+// Pieces standing on `o` (moved along with it).
+const ridersOf = o => {
+  const top = surfaceTop(o);
+  if (top == null) return [];
+  return state.items.filter(q => q.id !== o.id && TYPES[q.type].onTop && Math.abs(q.elev - top) < 1 && insideItem(o, q.x, q.z));
+};
+
 // Hang a wall piece (painting, shelf, TV…) on the closest straight wall within `maxDist`:
 // back against the wall face on the side of (x, z). Returns false if no wall is close.
 function mountOnWall(it, x, z, maxDist) {
@@ -1240,7 +1310,8 @@ canvas.addEventListener('pointerdown', e => {
     } else if (hit?.kind === 'item') {
       select({ kind: 'item', id: hit.id });
       const it = getItem(hit.id);
-      drag = { kind: 'item', id: hit.id, off: [it.x - p[0], it.z - p[1]], moved: false };
+      const riders = ridersOf(it).map(q => ({ id: q.id, dx: q.x - it.x, dz: q.z - it.z }));
+      drag = { kind: 'item', id: hit.id, off: [it.x - p[0], it.z - p[1]], moved: false, riders };
     } else if (hit?.kind === 'wall' && tab === 'plan') {
       select({ kind: 'wall', id: hit.id });
       drag = { kind: 'wall', id: hit.id, p0: p, base: structuredClone(state), moved: false };
@@ -1326,7 +1397,15 @@ function dragItem(p, free) {
       [x, z] = snapToWalls(it, x, z);
     }
     it.x = x; it.z = z;
+    // Small pieces climb onto the furniture under them; Alt keeps them on the floor.
+    if (TYPES[it.type].onTop) it.elev = free ? 0 : supportUnder(it, x, z)?.top ?? 0;
     placeObj(itemObjs.get(it.id), it);
+    for (const r of drag.riders || []) {
+      const q = getItem(r.id);
+      if (!q) continue;
+      q.x = it.x + r.dx; q.z = it.z + r.dz;
+      placeObj(itemObjs.get(q.id), q);
+    }
   }
   updateOverlay();
 }
@@ -1606,6 +1685,11 @@ function addItem(type, at) {
   } else {
     it.x = snapTo(p.x, state.snap); it.z = snapTo(p.z, state.snap);
     if (t.wallMount) mountOnWall(it, it.x, it.z, Infinity);
+    if (t.onTop) {
+      const sup = supportUnder(it, it.x, it.z);
+      if (sup) it.elev = sup.top;
+      else if (at || !restOnSurface(it, p)) it.elev = 0;
+    }
     state.items.push(it);
   }
   refreshItem(it);
@@ -1621,7 +1705,10 @@ function deleteSelection() {
   if (!selection) return;
   if (selection.kind === 'item') {
     const it = getItem(selection.id);
+    const riders = it ? ridersOf(it) : [];
     state.items = state.items.filter(i => i.id !== selection.id);
+    // What stood on it drops to whatever is below now.
+    for (const q of riders) q.elev = supportUnder(q, q.x, q.z)?.top ?? 0;
     selection = null;
     rebuildItems();
     if (it && isOpening(it)) rebuildWalls();
