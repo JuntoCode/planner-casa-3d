@@ -373,9 +373,9 @@ export const CATALOG = [
     { type: 'rug', name: 'Tappeto', build: 'rug', w: 200, d: 140, h: 1, color: '#9c8f7c', noCollide: true },
   ] },
   { cat: 'Pranzo', items: [
-    { type: 'table', name: 'Tavolo', build: 'table', w: 140, d: 80, h: 75, color: '#c9a57a' },
-    { type: 'roundTable', name: 'Tavolo rotondo', build: 'roundTable', w: 100, d: 100, h: 75, color: '#f2f0eb' },
-    { type: 'chair', name: 'Sedia', build: 'chair', w: 45, d: 50, h: 85, color: '#c9a57a' },
+    { type: 'table', name: 'Tavolo', build: 'table', w: 140, d: 80, h: 75, color: '#c9a57a', openBelow: true },
+    { type: 'roundTable', name: 'Tavolo rotondo', build: 'roundTable', w: 100, d: 100, h: 75, color: '#f2f0eb', openBelow: true },
+    { type: 'chair', name: 'Sedia', build: 'chair', w: 45, d: 50, h: 85, color: '#c9a57a', tucks: true },
   ] },
   { cat: 'Camera', items: [
     { type: 'bed2', name: 'Letto matrimoniale', build: 'bed', w: 160, d: 205, h: 100, color: '#d8cdbd' },
@@ -402,8 +402,8 @@ export const CATALOG = [
     { type: 'washer', name: 'Lavatrice', build: 'washer', w: 60, d: 60, h: 85, color: '#f2f3f4' },
   ] },
   { cat: 'Ufficio', items: [
-    { type: 'desk', name: 'Scrivania', build: 'desk', w: 140, d: 70, h: 75, color: '#f2f0eb' },
-    { type: 'officeChair', name: 'Sedia da ufficio', build: 'officeChair', w: 60, d: 60, h: 105, color: '#3b3f45' },
+    { type: 'desk', name: 'Scrivania', build: 'desk', w: 140, d: 70, h: 75, color: '#f2f0eb', openBelow: true },
+    { type: 'officeChair', name: 'Sedia da ufficio', build: 'officeChair', w: 60, d: 60, h: 105, color: '#3b3f45', tucks: true },
   ] },
   { cat: 'Decorazioni', items: [
     { type: 'lamp', name: 'Lampada da terra', build: 'lamp', w: 40, d: 40, h: 160, color: '#f3ead6' },

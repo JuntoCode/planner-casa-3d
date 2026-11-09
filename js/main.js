@@ -758,6 +758,9 @@ function solidSegments() {
   return segs;
 }
 
+// Chairs (`tucks`) can slide under tables and desks (`openBelow`).
+const tucksUnder = (a, b) => TYPES[a.type].tucks && TYPES[b.type].openBelow;
+
 function findConflicts() {
   const bad = new Set();
   const list = state.items.filter(i => !isOpening(i) && !TYPES[i.type].noCollide);
@@ -767,6 +770,7 @@ function findConflicts() {
     for (let j = i + 1; j < list.length; j++) {
       const A = list[i], B = list[j];
       if (A.elev >= B.elev + B.h || B.elev >= A.elev + A.h) continue;
+      if (tucksUnder(A, B) || tucksUnder(B, A)) continue; // a chair pushed under a table is fine
       if (overlap(polys[i], polys[j])) { bad.add(A.id); bad.add(B.id); }
     }
     const ok = polys[i].every(p => rooms.some(r => G.inPoly(p[0], p[1], r.pts)) && segs.every(([a, b, h]) => G.segDist(p, a, b).d >= h - 0.6));
