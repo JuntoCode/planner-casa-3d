@@ -35,6 +35,9 @@ export function inPoly(x, z, pts) {
   return inside;
 }
 
+// Inside a room: its outline but not its holes (a garden around the house has the house as a hole).
+export const inRoom = (x, z, r) => inPoly(x, z, r.pts) && !(r.holes || []).some(h => inPoly(x, z, h));
+
 // Distance from p to segment a-b, with the parameter t (0..1) of the closest point.
 export function segDist(p, a, b) {
   const ab = sub(b, a), l2 = dot(ab, ab) || 1;
@@ -68,16 +71,16 @@ export function lineIntersect(p, d, q, e) {
   return add(p, mul(d, t));
 }
 
-// The point deepest inside a polygon: where a label goes.
-export function pole(pts) {
+// The point deepest inside a polygon (and outside its holes): where a label goes.
+export function pole(pts, holes = []) {
   let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
   for (const [x, z] of pts) { x0 = Math.min(x0, x); z0 = Math.min(z0, z); x1 = Math.max(x1, x); z1 = Math.max(z1, z); }
   let best = null, bd = -1;
   const N = 18;
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
     const x = x0 + ((i + 0.5) / N) * (x1 - x0), z = z0 + ((j + 0.5) / N) * (z1 - z0);
-    if (!inPoly(x, z, pts)) continue;
-    const d = edgeDist(x, z, pts);
+    if (!inPoly(x, z, pts) || holes.some(h => inPoly(x, z, h))) continue;
+    const d = Math.min(edgeDist(x, z, pts), ...holes.map(h => edgeDist(x, z, h)));
     if (d > bd) { bd = d; best = [x, z]; }
   }
   return best || [(x0 + x1) / 2, (z0 + z1) / 2];

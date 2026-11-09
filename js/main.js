@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { CATALOG, TYPES, SWATCHES, WOOD_SWATCHES, STYLES, styleColor, baseColor, isWood, buildModel } from './catalog.js';
-import { FLOORS, TILE_M, WOODS, floorTexture, woodTexture } from './textures.js';
+import { FLOORS, TILE_M, WOODS, floorTexture, woodTexture, hedgeTexture } from './textures.js';
 import { ENVIRONMENTS, LEVELS, createEnvironment } from './env.js';
 import { PRESETS } from './presets.js';
 import { createWizard } from './wizard.js';
@@ -78,6 +78,7 @@ function normalize(d) {
       w: +i.w || t.w, d: +i.d || t.d, h: +i.h || t.h,
       elev: i.elev != null ? +i.elev : t.elev, color: i.color || t.color,
     };
+    if (i.seed != null && isFinite(+i.seed)) it.seed = +i.seed;
     if (t.opening) Object.assign(it, { wall: i.wall, t: +i.t || 0, flip: !!i.flip });
     return it;
   }).filter(it => !TYPES[it.type].opening || out.walls.some(w => w.id === it.wall));
@@ -152,7 +153,7 @@ function bounds() {
   return b;
 }
 
-const roomAt = p => rooms.find(r => G.inPoly(p.x, p.z, r.pts));
+const roomAt = p => rooms.find(r => G.inRoom(p.x, p.z, r));
 
 // ---------- three.js setup ----------
 
@@ -314,7 +315,11 @@ function clearGroup(g, keepMaterials = false) {
   while (g.children.length) g.remove(g.children[0]);
 }
 
-const shapeOf = pts => new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x / 100, -z / 100)));
+const shapeOf = (pts, holes = []) => {
+  const s = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x / 100, -z / 100)));
+  for (const h of holes) s.holes.push(new THREE.Path(h.map(([x, z]) => new THREE.Vector2(x / 100, -z / 100))));
+  return s;
+};
 
 // Extrude a footprint (cm, [x, z]) between two heights. Material 0 = top/bottom, 1 = sides.
 function prism(pts, y0, y1) {
@@ -330,7 +335,7 @@ function rebuildRooms() {
     const tex = floorTexture(r.meta.floor).clone();
     tex.repeat.set(1 / TILE_M, 1 / TILE_M);
     tex.needsUpdate = true;
-    const m = new THREE.Mesh(new THREE.ShapeGeometry(shapeOf(r.pts)), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(shapeOf(r.pts, r.holes)), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
     m.rotation.x = -Math.PI / 2;
     m.position.y = 0.002;
     m.receiveShadow = true;
@@ -341,7 +346,7 @@ function rebuildRooms() {
     el.className = 'room-label' + (r.meta.autoName ? ' auto' : '');
     el.innerHTML = `<b>${esc(r.meta.name)}</b><span>${m2(r.area)} m²</span>`;
     const lbl = new CSS2DObject(el);
-    const p = r.meta.anchor || G.pole(r.pts);
+    const p = r.meta.anchor || G.pole(r.pts, r.holes);
     lbl.position.set(p[0] / 100, 0.05, p[1] / 100);
     floorsG.add(lbl);
   }
@@ -353,7 +358,7 @@ ceilingMat.userData.shared = true;
 function rebuildCeilings() {
   clearGroup(ceilingsG);
   for (const r of rooms) {
-    if (['terrace', 'balcony'].includes(r.meta.type)) continue;
+    if (Plan.OUTDOOR.has(r.meta.type)) continue;
     // Facing down: shape in (x, z) and turned +90° so its normal points to the floor.
     const shape = new THREE.Shape(r.pts.map(([x, z]) => new THREE.Vector2(x / 100, z / 100)));
     const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), ceilingMat);
@@ -416,11 +421,13 @@ const wallMats = {
 };
 Object.values(wallMats).forEach(m => { m.userData.shared = true; });
 
-const RAIL_STYLES = { glass: 'Vetro', bars: 'Sbarre', wood: 'Legno', wall: 'Muretto' };
+const RAIL_STYLES = { glass: 'Vetro', bars: 'Sbarre', wood: 'Legno', wall: 'Muretto', fence: 'Staccionata', hedge: 'Siepe', curb: 'Cordolo' };
 const railMats = {
   wood: new THREE.MeshStandardMaterial({ map: woodTexture('oak'), roughness: 0.7 }),
   plaster: new THREE.MeshStandardMaterial({ color: '#efebe4', roughness: 0.95 }),
   stone: new THREE.MeshStandardMaterial({ color: '#c9c2b6', roughness: 0.8 }),
+  paint: new THREE.MeshStandardMaterial({ color: '#f3f0e8', roughness: 0.8 }),
+  hedge: new THREE.MeshStandardMaterial({ map: hedgeTexture(), color: '#b9d6a4', roughness: 1 }),
 };
 Object.values(railMats).forEach(m => { m.userData.shared = true; });
 
@@ -473,6 +480,16 @@ function buildRailing(g, w, o, H) {
     const pts = along(o.path, 100);
     pts.push({ p: o.path[0], d: G.norm(G.sub(o.path[1], o.path[0])) }, { p: o.path[o.path.length - 1], d: G.norm(G.sub(o.path[o.path.length - 1], o.path[o.path.length - 2])) });
     posts(pts, 8, 0, H - 7, railMats.wood);
+  } else if (style === 'fence') {
+    // Garden picket fence: two rails and white pickets.
+    for (const y of [22, H - 28]) band(1.5, y, y + 8, railMats.paint);
+    posts(along(o.path, 13), 8, 4, H, railMats.paint);
+  } else if (style === 'hedge') {
+    const half = Plan.wallThickness(state, w) / 2;
+    band(half, 0, H - 8, railMats.hedge);
+    band(half - 4, H - 8, H, railMats.hedge);
+  } else if (style === 'curb') {
+    band(Plan.wallThickness(state, w) / 2, 0, H, railMats.stone);
   } else {
     band(7, 0, H - 5, [railMats.stone, railMats.plaster]);
     band(9, H - 5, H, railMats.stone);
@@ -632,7 +649,7 @@ function poseOpening(o, k) {
 }
 
 const planDir = it => { const r = THREE.MathUtils.degToRad(it.rot); return [Math.cos(r), -Math.sin(r)]; }; // local +x
-const indoorAt = p => { const r = roomAt({ x: p[0], z: p[1] }); return !!r && !['terrace', 'balcony'].includes(r.meta.type); };
+const indoorAt = p => { const r = roomAt({ x: p[0], z: p[1] }); return !!r && !Plan.OUTDOOR.has(r.meta.type); };
 
 // Doors open the way the plan shows (flip); windows always open into the room.
 function openSide(it) {
@@ -724,6 +741,7 @@ function walkColliders() {
     if (w.type === 'divider') continue;
     const h = Plan.wallThickness(state, w) / 2;
     const path = Plan.wallPathOf(state, w, nm);
+    if (w.type === 'railing' && w.style === 'curb') continue; // a curb is stepped over
     if (w.type !== 'wall' || Plan.isCurved(w)) {
       for (let i = 1; i < path.length; i++) segs.push([path[i - 1], path[i], h]);
       continue;
@@ -737,9 +755,17 @@ function walkColliders() {
     for (const [s, e] of gaps) { if (s > cur) segs.push([at(cur), at(s), h]); cur = Math.max(cur, e); }
     if (cur < len) segs.push([at(cur), at(len), h]);
   }
-  const boxes = state.items
-    .filter(it => !isOpening(it) && !TYPES[it.type].noCollide && it.h >= 25 && it.elev < 120)
-    .map(it => ({ x: it.x, z: it.z, w: it.w, d: it.d, rot: it.rot }));
+  const boxes = [];
+  for (const it of state.items) {
+    const t = TYPES[it.type];
+    if (isOpening(it) || t.noCollide || it.h < 25 || it.elev >= 120) continue;
+    if (t.hit === 'posts') {
+      for (const [x, z] of corners(it, 6)) boxes.push({ x, z, w: 12, d: 12, rot: it.rot });
+      continue;
+    }
+    const s = solidPart(it);
+    boxes.push({ x: s.x, z: s.z, w: s.w, d: s.d, rot: s.rot });
+  }
   return { segs, boxes };
 }
 
@@ -751,13 +777,13 @@ function enterWalk() {
   // Start where the 3D view was looking, if that is inside a room; otherwise in the largest room.
   const from = view3d || { pos: persp.position, target: controls.target };
   let start = { x: from.target.x * 100, z: from.target.z * 100 };
-  const indoor = rooms.filter(r => !['terrace', 'balcony'].includes(r.meta.type));
-  const here = indoor.find(r => G.inPoly(start.x, start.z, r.pts));
+  const indoor = rooms.filter(r => !Plan.OUTDOOR.has(r.meta.type));
+  const here = indoor.find(r => G.inRoom(start.x, start.z, r));
   // Corridors and tiny rooms make a poor first view: start in the biggest room instead.
   if (!here || here.area < 90000 || ['corridor', 'entrance', 'storage'].includes(here.meta.type)) {
     const big = [...indoor].sort((a, b) => b.area - a.area)[0];
     if (!big) { toast('Disegna almeno una stanza per poterci camminare dentro.'); return; }
-    const p = big.meta.anchor || G.pole(big.pts);
+    const p = big.meta.anchor || G.pole(big.pts, big.holes);
     start = { x: p[0], z: p[1] };
   }
   const yaw = Math.atan2(-(from.target.x - from.pos.x), -(from.target.z - from.pos.z));
@@ -867,10 +893,16 @@ function solidSegments() {
 // Chairs (`tucks`) can slide under tables and desks (`openBelow`).
 const tucksUnder = (a, b) => TYPES[a.type].tucks && TYPES[b.type].openBelow;
 
+// The part of a piece that really takes room: a tree's trunk, a parasol's pole.
+function solidPart(it) {
+  const hit = TYPES[it.type].hit;
+  return typeof hit === 'number' ? { ...it, w: Math.max(it.w * hit, 8), d: Math.max(it.d * hit, 8) } : it;
+}
+
 function findConflicts() {
   const bad = new Set();
-  const list = state.items.filter(i => !isOpening(i) && !TYPES[i.type].noCollide);
-  const polys = list.map(i => corners(i, 0.5));
+  const list = state.items.filter(i => !isOpening(i) && !TYPES[i.type].noCollide && TYPES[i.type].hit !== 'posts');
+  const polys = list.map(i => corners(solidPart(i), 0.5));
   const segs = solidSegments();
   for (let i = 0; i < list.length; i++) {
     for (let j = i + 1; j < list.length; j++) {
@@ -879,7 +911,7 @@ function findConflicts() {
       if (tucksUnder(A, B) || tucksUnder(B, A)) continue; // a chair pushed under a table is fine
       if (overlap(polys[i], polys[j])) { bad.add(A.id); bad.add(B.id); }
     }
-    const ok = polys[i].every(p => rooms.some(r => G.inPoly(p[0], p[1], r.pts)) && segs.every(([a, b, h]) => G.segDist(p, a, b).d >= h - 0.6));
+    const ok = polys[i].every(p => (TYPES[list[i].type].outdoor || rooms.some(r => G.inRoom(p[0], p[1], r))) && segs.every(([a, b, h]) => G.segDist(p, a, b).d >= h - 0.6));
     if (!ok) bad.add(list[i].id);
   }
   return bad;
@@ -1023,7 +1055,7 @@ function lengthLabel(w, room) {
   const [A, B] = Plan.wallEnds(state, w, nm);
   const n = G.left(G.norm(G.sub(B, A)));
   let s = 1;
-  if (room) s = G.inPoly(mid[0] + n[0] * 3, mid[1] + n[1] * 3, room.pts) ? 1 : -1;
+  if (room) s = G.inRoom(mid[0] + n[0] * 3, mid[1] + n[1] * 3, room) ? 1 : -1;
   const pos = G.add(mid, G.mul(n, s * 32));
   const el = document.createElement('div');
   el.className = 'edge-label';
@@ -1117,6 +1149,33 @@ function snapToWalls(it, x, z) {
   }
   if (best) { x += best.n[0] * best.corr; z += best.n[1] * best.corr; }
   return [x, z];
+}
+
+// Hang a wall piece (painting, shelf, TV…) on the closest straight wall within `maxDist`:
+// back against the wall face on the side of (x, z). Returns false if no wall is close.
+function mountOnWall(it, x, z, maxDist) {
+  const nm = Plan.nodeMap(state);
+  let best = null;
+  for (const w of state.walls) {
+    if (w.type !== 'wall' || Plan.isCurved(w)) continue;
+    const [A, B] = Plan.wallEnds(state, w, nm);
+    const r = G.segDist([x, z], A, B);
+    if (r.d > maxDist || (best && r.d >= best.dist)) continue;
+    const len = G.dist(A, B);
+    if (len < it.w) continue;
+    const d = G.norm(G.sub(B, A)), n = G.left(d);
+    const side = Math.sign(G.dot(G.sub([x, z], A), n)) || 1;
+    const u = Math.min(Math.max(G.dot(G.sub([x, z], A), d), it.w / 2), len - it.w / 2);
+    best = { dist: r.d, A, d, n: G.mul(n, side), u, t: Plan.wallThickness(state, w) / 2 };
+  }
+  if (!best) return false;
+  const off = best.t + it.d / 2 + 0.2;
+  const p = G.add(G.add(best.A, G.mul(best.d, best.u)), G.mul(best.n, off));
+  it.x = Math.round(p[0] * 10) / 10;
+  it.z = Math.round(p[1] * 10) / 10;
+  // Local +z (the front) points away from the wall.
+  it.rot = ((Math.round(THREE.MathUtils.radToDeg(Math.atan2(best.n[0], best.n[1]))) % 360) + 360) % 360;
+  return true;
 }
 
 // ---------- picking ----------
@@ -1263,6 +1322,7 @@ function dragItem(p, free) {
     let x = p[0] + drag.off[0], z = p[1] + drag.off[1];
     if (!free) {
       x = snapTo(x, state.snap); z = snapTo(z, state.snap);
+      if (TYPES[it.type].wallMount && mountOnWall(it, x, z, 90)) { placeObj(itemObjs.get(it.id), it); updateOverlay(); return; }
       [x, z] = snapToWalls(it, x, z);
     }
     it.x = x; it.z = z;
@@ -1362,6 +1422,8 @@ const TOOLS = {
   room: { hint: 'Trascina per disegnare una stanza rettangolare. Se tocca altri muri si collega a loro.' },
   divider: { type: 'divider', hint: 'Traccia una linea tra due muri per dividere una stanza senza costruire un muro, per esempio l\'<b>ingresso</b> dal soggiorno.' },
   railing: { type: 'railing', hint: 'Disegna la ringhiera di un <b>terrazzo</b> o balcone, partendo e finendo su un muro esterno della casa.' },
+  fence: { type: 'railing', style: 'fence', hint: 'Disegna il recinto del <b>giardino</b>: un clic per ogni angolo, anche tutto intorno alla casa. Clicca poi il recinto per farlo diventare <b>siepe</b>.' },
+  curb: { type: 'railing', style: 'curb', hint: 'Disegna il bordo di un <b>patio</b> o di un vialetto, partendo e finendo su un muro della casa. Il cordolo si scavalca.' },
 };
 let draw = null; // { start, first, segs } for lines, { p0 } for rooms
 let typed = '';
@@ -1407,7 +1469,7 @@ function placeDrawPoint(s) {
   if (!draw) { draw = { start: s.p, first: s.p, segs: 0 }; return; }
   if (G.dist(s.p, draw.start) < 2) { finishDraw(); return; }
   const existed = s.kind === 'node' || s.kind === 'wall';
-  Plan.addSegment(state, draw.start, s.p, { type: TOOLS[tool].type }, 1);
+  Plan.addSegment(state, draw.start, s.p, { type: TOOLS[tool].type, style: TOOLS[tool].style }, 1);
   draw.segs++;
   rebuildGeometry();
   updateSun();
@@ -1522,17 +1584,18 @@ function select(sel) {
 
 function defaultSpot() {
   const sr = selection?.kind === 'room' && getRoom(selection.id);
-  if (sr) { const p = sr.meta.anchor || G.pole(sr.pts); return { x: p[0], z: p[1] }; }
+  if (sr) { const p = sr.meta.anchor || G.pole(sr.pts, sr.holes); return { x: p[0], z: p[1] }; }
   const t = { x: controls.target.x * 100, z: controls.target.z * 100 };
   if (roomAt(t)) return t;
   const r = [...rooms].sort((a, b) => b.area - a.area)[0];
-  if (r) { const p = r.meta.anchor || G.pole(r.pts); return { x: p[0], z: p[1] }; }
+  if (r) { const p = r.meta.anchor || G.pole(r.pts, r.holes); return { x: p[0], z: p[1] }; }
   return t;
 }
 
 function addItem(type, at) {
   const t = TYPES[type];
   const it = { id: newId(), type, x: 0, z: 0, rot: 0, w: t.w, d: t.d, h: t.h, elev: t.elev, color: t.color };
+  if (t.ceiling) it.elev = Math.max(0, state.wallH - t.h);
   const p = at || defaultSpot();
   if (t.opening) {
     const s = Plan.wallSlot(state, [p.x, p.z], it.w);
@@ -1542,6 +1605,7 @@ function addItem(type, at) {
     Plan.syncOpenings(state);
   } else {
     it.x = snapTo(p.x, state.snap); it.z = snapTo(p.z, state.snap);
+    if (t.wallMount) mountOnWall(it, it.x, it.z, Infinity);
     state.items.push(it);
   }
   refreshItem(it);
@@ -1775,6 +1839,7 @@ function renderProps() {
         ${SWATCHES.map(c => swatch(c, it.color)).join('')}
         <input type="color" data-k="color" value="${baseColor(it.color)}" title="Colore personalizzato">
       </div></div>
+      ${t.art && !['subway', 'wallMosaic', 'wallHex'].includes(t.art) ? `<div class="field"><span>Immagine</span><div class="row"><button data-act="reseed">🎲 Cambia disegno</button></div></div>` : ''}
       <div class="actions">
         <button data-act="dup">Duplica <kbd>Ctrl D</kbd></button>
         <button data-act="del" class="danger">Elimina <kbd>Canc</kbd></button>
@@ -1931,8 +1996,7 @@ $('#props').addEventListener('click', e => {
   else if (b.dataset.color) applyProp('color', b.dataset.color);
   else if (b.dataset.rstyle) {
     getWall(selection.id).style = b.dataset.rstyle;
-    rebuildWalls();
-    updateOverlay();
+    rebuildGeometry(); // garden, patio or terrace depends on the style
     commit();
     renderProps();
   } else if (b.dataset.wtype) {
@@ -1948,6 +2012,12 @@ $('#props').addEventListener('click', e => {
   } else if (b.dataset.act === 'close') select(null);
   else if (b.dataset.act === 'del') deleteSelection();
   else if (b.dataset.act === 'dup') duplicateSelection();
+  else if (b.dataset.act === 'reseed') {
+    const it = getItem(selection.id);
+    it.seed = (it.seed ?? Math.floor(Math.random() * 8)) + 1;
+    refreshItem(it);
+    commit();
+  }
   else if (b.dataset.act === 'split') {
     const w = getWall(selection.id);
     Plan.splitWall(state, w.id, pathMid(Plan.wallPathOf(state, w)));
@@ -1960,19 +2030,20 @@ $('#props').addEventListener('click', e => {
 // ---------- UI: plan tab ----------
 
 function renderPlanTab() {
-  const total = rooms.filter(r => !['terrace', 'balcony'].includes(r.meta.type)).reduce((s, r) => s + r.area, 0);
-  const outside = rooms.filter(r => ['terrace', 'balcony'].includes(r.meta.type)).reduce((s, r) => s + r.area, 0);
+  const total = rooms.filter(r => !Plan.OUTDOOR.has(r.meta.type)).reduce((s, r) => s + r.area, 0);
+  const outside = rooms.filter(r => Plan.OUTDOOR.has(r.meta.type)).reduce((s, r) => s + r.area, 0);
   $('#tab-plan').innerHTML = `
     <div class="block">
       <h4>Disegna</h4>
       <div class="tool-grid">
-        ${[['wall', '✎', 'Muro'], ['room', '▭', 'Stanza'], ['divider', '┆', 'Divisorio'], ['railing', '⫼', 'Ringhiera']].map(([t, i, n]) =>
+        ${[['wall', '✎', 'Muro'], ['room', '▭', 'Stanza'], ['divider', '┆', 'Divisorio'], ['railing', '⫼', 'Ringhiera'], ['fence', '❦', 'Giardino'], ['curb', '▱', 'Patio']].map(([t, i, n]) =>
           `<button data-tool="${t}" class="${tool === t ? 'on' : ''}"><i>${i}</i>${n}</button>`).join('')}
       </div>
       <div class="howto">
         <div><i class="ico">✎</i><span>Disegna i <b>muri</b> come su un foglio: le stanze chiuse vengono riconosciute da sole (bagno, camera, ingresso…).</span></div>
         <div><i class="dot-h"></i><span>Con <b>Seleziona</b> trascina muri e angoli; il <b>rombo arancione</b> curva il muro selezionato.</span></div>
         <div><i class="ico">┆</i><span>Il <b>divisorio</b> separa due zone senza muro, ad esempio l'ingresso.</span></div>
+        <div><i class="ico">❦</i><span>Fuori casa: il <b>recinto</b> crea un giardino (anche tutto intorno), il <b>cordolo</b> un patio pavimentato.</span></div>
       </div>
     </div>
     <div class="block">
@@ -2026,7 +2097,12 @@ $('#tab-plan').addEventListener('change', e => {
   const k = e.target.dataset.k;
   const v = parseFloat(e.target.value);
   if (!k || !isFinite(v)) return;
-  if (k === 'wallH') state.wallH = Math.min(600, Math.max(60, v));
+  if (k === 'wallH') {
+    const old = state.wallH;
+    state.wallH = Math.min(600, Math.max(60, v));
+    // Lamps hanging from the ceiling move with it.
+    for (const it of state.items) if (TYPES[it.type].ceiling && Math.abs(it.elev + it.h - old) < 2) it.elev = state.wallH - it.h;
+  }
   if (k === 'wallT') state.wallT = Math.min(60, Math.max(2, v));
   if (k === 'snap') state.snap = Math.min(50, Math.max(1, v));
   rebuildItems();

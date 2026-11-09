@@ -108,4 +108,23 @@ const nearWin = s4.nodes.find(n => n.x === 400 && n.z === 0).id;
 const blocked = P.cornerInfo(s4, nearWin);
 check('window limits radius', blocked.ok && blocked.maxR <= 55, `max ${blocked.maxR}`);
 
+// 10. a fence all around the house makes a garden with the house as a hole
+const s5 = { wallH: 270, wallT: 10, nodes: [], walls: [], rooms: [], items: [] };
+const ring = (pts, props) => { for (let i = 0; i < pts.length; i++) P.addSegment(s5, pts[i], pts[(i + 1) % pts.length], props); };
+ring([[0, 0], [600, 0], [600, 400], [0, 400]]);
+ring([[-500, -500], [1100, -500], [1100, 900], [-500, 900]], { type: 'railing', style: 'fence' });
+let r5 = P.syncRooms(s5, true);
+const garden = r5.find(r => r.meta.type === 'garden');
+check('garden around the house', r5.length === 2 && garden && garden.holes.length === 1, names(r5));
+check('garden area excludes the house', garden && Math.abs(garden.area - (1600 * 1400 - 600 * 400)) < 10, garden && (garden.area / 1e4).toFixed(1));
+check('house point is not in the garden', garden && !G.inRoom(300, 200, garden) && G.inRoom(-200, 0, garden));
+const house = r5.find(r => r !== garden);
+check('house keeps its own room', house && G.inRoom(300, 200, house) && house.meta.type !== 'garden', house && house.meta.type);
+// a curb from house wall to house wall makes a patio
+P.addSegment(s5, [100, 400], [100, 600], { type: 'railing', style: 'curb' });
+P.addSegment(s5, [100, 600], [500, 600], { type: 'railing', style: 'curb' });
+P.addSegment(s5, [500, 600], [500, 400], { type: 'railing', style: 'curb' });
+r5 = P.syncRooms(s5, true);
+check('patio from a curb', r5.some(r => r.meta.type === 'patio'), names(r5));
+
 console.log(fails ? `${fails} FAILED` : 'all good');

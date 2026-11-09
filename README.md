@@ -18,8 +18,23 @@ senza build: HTML, CSS e JavaScript modules.
   un muro; scrivi le misure dei lati; dividi o elimina un muro.
 - **Porte e finestre** (anche portefinestre e vetrate scorrevoli): si agganciano ai muri e li tagliano;
   la porta mostra l'arco di apertura.
-- **Mobili** (~30 elementi tra soggiorno, camera, cucina, bagno, ufficio): dimensioni e colore
-  modificabili, rotazione, aggancio alla griglia e ai muri.
+- **Mobili e oggetti** (oltre 100): soggiorno, camera, cucina, bagno, ufficio, più
+  - **decorazioni**: quadri, poster, arazzo mandala, specchi, orologio, mensola con libri, vaso di fiori;
+  - **tappeti**: persiano, berbero, kilim, passatoia, rotondi;
+  - **luci**: lampadario, sospensioni, plafoniera, lampade da terra, ad arco, treppiede, da tavolo, luci fairy;
+  - **piante**: monstera, sansevieria, palma, ficus, ulivo, felce, cactus, piante grasse, bonsai, pianta pendente;
+  - **tecnologia e musica**: PC, portatile, TV a parete, chitarre a parete o su supporto, pianoforti, batteria;
+  - **animali**: cucce per cane e gatto, ciotole, tiragraffi, lettiera, acquario;
+  - **rivestimenti** a piastrelle per bagno e cucina.
+
+  Quadri, specchi e TV si appendono da soli al muro più vicino; i lampadari si agganciano al soffitto.
+  Dimensioni e colore modificabili, rotazione, aggancio alla griglia e ai muri.
+- **Giardino e patio**: lo strumento *Giardino* disegna una staccionata (o siepe) anche tutto intorno
+  alla casa, *Patio* un cordolo per una zona pavimentata. In giardino: alberi, ulivo, cipresso,
+  cespugli, aiuole, lavanda, orto, piscina, pergola, ombrellone, lettino, barbecue, panchina,
+  lampione, casetta degli attrezzi, cuccia del cane.
+- **Pavimenti**: parquet, spina di pesce, marmo, gres, scacchiera, esagonette, cementine, mosaico,
+  ardesia, graniglia, cotto; fuori prato, ghiaia, lastre di pietra, autobloccanti, doghe.
 - **Finiture e stili**: legni (rovere, frassino, ciliegio, noce, wengé) e 18 colori; stili con un clic
   (Legno naturale, Minimal, Scandinavo, Classico, Industriale, Colorato) che ricolorano tutti i mobili.
 - **Ringhiere**: vetro, sbarre, legno o muretto. In cucina anche pensile con cappa e cappa a camino.
@@ -62,6 +77,8 @@ Poi apri <http://localhost:8123>.
 - `index.html` – layout e import map di Three.js (CDN jsDelivr, versione 0.170.0)
 - `js/main.js` – scena, stanze, muri, trascinamento, interfaccia
 - `js/catalog.js` – catalogo e modelli 3D dei mobili costruiti con primitive
+- `js/decor.js` – modelli di decorazioni, luci, piante, musica, animali e giardino
+- `js/art.js` – quadri, poster, mandala, tappeti e piastrelle disegnati su canvas
 - `js/textures.js` – texture dei pavimenti generate su canvas
 - `js/presets.js` – appartamenti di esempio
 - `js/plan.js` – modello a grafo di muri: disegno, riconoscimento stanze e tipo, conversione vecchi progetti

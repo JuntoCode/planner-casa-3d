@@ -20,8 +20,17 @@ export const ROOM_TYPES = {
   laundry: { label: 'Lavanderia', floor: 'tiles' },
   terrace: { label: 'Terrazzo', floor: 'decking' },
   balcony: { label: 'Balcone', floor: 'cotto' },
+  garden: { label: 'Giardino', floor: 'grass' },
+  patio: { label: 'Patio', floor: 'stone' },
   other: { label: 'Stanza', floor: 'parquet' },
 };
+
+// Open-air areas: no ceiling, not counted as living space.
+export const OUTDOOR = new Set(['terrace', 'balcony', 'garden', 'patio']);
+
+// Railing styles that change size: hedges are thick, a curb is a low edge you can step over.
+const RAIL_T = { hedge: 35, curb: 12 };
+const RAIL_H = { hedge: 120, curb: 8, fence: 95 };
 
 export const WALL_TYPES = {
   wall: 'Muro',
@@ -50,10 +59,10 @@ export function wallLength(st, w, nm = nodeMap(st)) {
 }
 export function wallThickness(st, w) {
   if (w.type === 'divider') return 0;
-  return w.t ?? (w.type === 'railing' ? 5 : st.wallT);
+  return w.t ?? (w.type === 'railing' ? RAIL_T[w.style] ?? 5 : st.wallT);
 }
 export function wallHeight(st, w) {
-  return w.h ?? (w.type === 'railing' ? 100 : st.wallH);
+  return w.h ?? (w.type === 'railing' ? RAIL_H[w.style] ?? 100 : st.wallH);
 }
 export const degree = (st, id) => st.walls.reduce((n, w) => n + (w.a === id) + (w.b === id), 0);
 
@@ -191,7 +200,7 @@ export function addSegment(st, p, q, props = {}, tol = 1) {
   for (let i = 1; i < chain.length; i++) {
     const u = chain[i - 1], v = chain[i];
     if (st.walls.some(w => (w.a === u && w.b === v) || (w.a === v && w.b === u))) continue;
-    st.walls.push({ id: uid('w'), a: u, b: v, type: props.type || 'wall', t: props.t ?? null, h: props.h ?? null, bulge: 0 });
+    st.walls.push({ id: uid('w'), a: u, b: v, type: props.type || 'wall', t: props.t ?? null, h: props.h ?? null, bulge: 0, ...(props.style ? { style: props.style } : {}) });
   }
   return b;
 }
@@ -350,6 +359,7 @@ export function computeFaces(st) {
 
   const visited = new Set();
   const faces = [];
+  const outlines = []; // outer boundaries of each separate group of walls
   for (const w0 of st.walls) {
     for (const from0 of [w0.a, w0.b]) {
       const key0 = w0.id + '>' + from0;
@@ -374,9 +384,18 @@ export function computeFaces(st) {
       const clean = G.cleanPoly(pts);
       if (clean.length < 3) continue;
       const a = G.signedArea(clean);
+      if (a < -3000) outlines.push({ pts: clean, nodes: new Set(nodes) });
       if (a < 3000) continue; // inner areas wind positive; the outside winds negative
-      faces.push({ pts: clean, walls: [...new Set(walls)], nodes: [...new Set(nodes)], area: a });
+      faces.push({ pts: clean, walls: [...new Set(walls)], nodes: [...new Set(nodes)], area: a, holes: [] });
     }
+  }
+  // A separate group of walls inside a room (the house inside a fenced garden) is a hole in it.
+  for (const o of outlines) {
+    const host = faces.filter(f => !f.nodes.some(n => o.nodes.has(n)) && G.inPoly(o.pts[0][0], o.pts[0][1], f.pts))
+      .sort((a, b) => a.area - b.area)[0];
+    if (!host) continue;
+    host.holes.push(o.pts);
+    host.area -= Math.abs(G.signedArea(o.pts));
   }
   return faces;
 }
@@ -392,11 +411,11 @@ export function syncRooms(st, prune = false) {
   const used = new Set();
   const rooms = [];
   for (const f of faces) {
-    let meta = st.rooms.find(m => !used.has(m.id) && m.anchor && G.inPoly(m.anchor[0], m.anchor[1], f.pts));
+    let meta = st.rooms.find(m => !used.has(m.id) && m.anchor && G.inRoom(m.anchor[0], m.anchor[1], f));
     if (!meta) { meta = newMeta(); st.rooms.push(meta); }
     used.add(meta.id);
-    if (!meta.anchor || !G.inPoly(meta.anchor[0], meta.anchor[1], f.pts) || G.edgeDist(meta.anchor[0], meta.anchor[1], f.pts) < 30) {
-      meta.anchor = G.pole(f.pts).map(round1);
+    if (!meta.anchor || !G.inRoom(meta.anchor[0], meta.anchor[1], f) || G.edgeDist(meta.anchor[0], meta.anchor[1], f.pts) < 30) {
+      meta.anchor = G.pole(f.pts, f.holes).map(round1);
     }
     rooms.push({ ...f, id: meta.id, meta });
   }
@@ -416,7 +435,7 @@ function autoLabel(st, rooms) {
   const indoor = rooms.filter(r => !r.walls.some(id => byId.get(id)?.type === 'railing'));
   const largest = indoor.reduce((m, r) => (!m || r.area > m.area ? r : m), null);
 
-  for (const r of rooms) r.contents = furniture.filter(it => G.inPoly(it.x, it.z, r.pts)).map(it => it.type);
+  for (const r of rooms) r.contents = furniture.filter(it => G.inRoom(it.x, it.z, r)).map(it => it.type);
   const fixedLiving = rooms.some(r => !r.meta.autoType && r.meta.type === 'living');
   for (const r of rooms) {
     const m = r.meta;
@@ -441,7 +460,10 @@ function guessType(st, r, { byId, faceCount, largest }) {
   const has = (...types) => types.some(t => r.contents.includes(t));
   const walls = r.walls.map(id => byId.get(id)).filter(Boolean);
   const m2 = r.area / 10000;
-  if (walls.some(w => w.type === 'railing')) return m2 < 6 ? 'balcony' : 'terrace';
+  const rails = walls.filter(w => w.type === 'railing');
+  if (rails.some(w => ['fence', 'hedge'].includes(w.style))) return 'garden';
+  if (rails.some(w => w.style === 'curb')) return 'patio';
+  if (rails.length) return m2 < 6 ? 'balcony' : 'terrace';
   if (has('toilet', 'bidet', 'shower', 'bathtub', 'washbasin')) return 'bath';
   if (has(...KITCHEN)) return has(...SOFA) ? 'living' : 'kitchen';
   if (has('bed2')) return 'bedroom';
@@ -469,7 +491,7 @@ export function typeFromName(name = '') {
     [/soggiorno|living|open space|salotto/, 'living'], [/cucin/, 'kitchen'], [/cameretta/, 'kidsroom'],
     [/camera|matrimonial|zona notte/, 'bedroom'], [/bagno|wc/, 'bath'], [/ingresso/, 'entrance'],
     [/corridoio|disimpegno/, 'corridor'], [/studio/, 'study'], [/ripost/, 'storage'], [/lavanderia/, 'laundry'],
-    [/terrazz/, 'terrace'], [/balcon/, 'balcony'],
+    [/terrazz/, 'terrace'], [/balcon/, 'balcony'], [/giardin|prato|orto/, 'garden'], [/patio|cortile|portico/, 'patio'],
   ];
   return rules.find(([re]) => re.test(n))?.[1] || 'other';
 }
@@ -478,7 +500,7 @@ export function typeFromName(name = '') {
 export function moveRoom(st, room, dx, dz) {
   const ids = new Set(room.nodes);
   for (const n of st.nodes) if (ids.has(n.id)) { n.x = round1(n.x + dx); n.z = round1(n.z + dz); }
-  for (const it of st.items) if (!it.wall && G.inPoly(it.x, it.z, room.pts)) { it.x += dx; it.z += dz; }
+  for (const it of st.items) if (!it.wall && G.inRoom(it.x, it.z, room)) { it.x += dx; it.z += dz; }
   if (room.meta.anchor) room.meta.anchor = [room.meta.anchor[0] + dx, room.meta.anchor[1] + dz];
 }
 

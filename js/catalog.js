@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { WOODS, woodTexture } from './textures.js';
+import { decorBuilders } from './decor.js';
 
 // Furniture catalog. Every model is built from primitives so it scales to any
 // size the user types. Builders get sizes in meters; local axes:
@@ -404,7 +405,12 @@ function mulberry(a) {
   };
 }
 
+Object.assign(B, decorBuilders({ box, cyl, mat, shade, mulberry, def: it => TYPES[it.type], DARK, WHITE, METAL, GLASS }));
+
 // Defaults in cm. `elev` = height from the floor; `opening` = cut into a wall.
+// `wallMount` = hangs on a wall (turns its back to it); `ceiling` = hangs from the ceiling;
+// `outdoor` = may stand outside the rooms; `hit` = share of the footprint that blocks
+// walking (trunks, poles) or 'posts' (only the four corners).
 export const CATALOG = [
   { cat: 'Soggiorno', items: [
     { type: 'sofa3', name: 'Divano 3 posti', build: 'sofa', w: 220, d: 95, h: 85, color: '#7d8a96' },
@@ -413,7 +419,6 @@ export const CATALOG = [
     { type: 'coffeeTable', name: 'Tavolino', build: 'coffeeTable', w: 100, d: 55, h: 42, color: '#c9a57a' },
     { type: 'tvStand', name: 'Mobile TV', build: 'tvStand', w: 160, d: 40, h: 45, color: '#f2f0eb' },
     { type: 'bookshelf', name: 'Libreria', build: 'bookshelf', w: 80, d: 30, h: 200, color: '#e8dcc6' },
-    { type: 'rug', name: 'Tappeto', build: 'rug', w: 200, d: 140, h: 1, color: '#9c8f7c', noCollide: true },
   ] },
   { cat: 'Pranzo', items: [
     { type: 'table', name: 'Tavolo', build: 'table', w: 140, d: 80, h: 75, color: '#c9a57a', openBelow: true },
@@ -435,6 +440,7 @@ export const CATALOG = [
     { type: 'hoodCabinet', name: 'Pensile con cappa', build: 'hoodCabinet', w: 60, d: 35, h: 70, elev: 145, color: '#e9e6df' },
     { type: 'chimneyHood', name: 'Cappa a camino', build: 'chimneyHood', w: 90, d: 50, h: 100, elev: 150, color: '#c0c4c6' },
     { type: 'fridge', name: 'Frigorifero', build: 'fridge', w: 60, d: 65, h: 185, color: '#e6e8ea' },
+    { type: 'backsplash', name: 'Paraschizzi piastrelle', build: 'tilePanel', art: 'subway', w: 180, d: 1, h: 60, elev: 90, color: '#ffffff', wallMount: true, noCollide: true },
   ] },
   { cat: 'Bagno', items: [
     { type: 'toilet', name: 'WC', build: 'toilet', w: 38, d: 60, h: 80, color: '#ffffff' },
@@ -443,14 +449,103 @@ export const CATALOG = [
     { type: 'shower', name: 'Doccia', build: 'shower', w: 90, d: 90, h: 200, color: '#dfefff' },
     { type: 'bathtub', name: 'Vasca', build: 'bathtub', w: 170, d: 75, h: 55, color: '#ffffff' },
     { type: 'washer', name: 'Lavatrice', build: 'washer', w: 60, d: 60, h: 85, color: '#f2f3f4' },
+    { type: 'tilesSubway', name: 'Rivestimento piastrelle', build: 'tilePanel', art: 'subway', w: 120, d: 1, h: 200, color: '#ffffff', wallMount: true, noCollide: true },
+    { type: 'tilesMosaic', name: 'Rivestimento mosaico', build: 'tilePanel', art: 'wallMosaic', w: 120, d: 1, h: 200, color: '#ffffff', wallMount: true, noCollide: true },
+    { type: 'tilesHex', name: 'Rivestimento esagonale', build: 'tilePanel', art: 'wallHex', w: 120, d: 1, h: 120, color: '#ffffff', wallMount: true, noCollide: true },
   ] },
   { cat: 'Ufficio', items: [
     { type: 'desk', name: 'Scrivania', build: 'desk', w: 140, d: 70, h: 75, color: '#f2f0eb', openBelow: true },
     { type: 'officeChair', name: 'Sedia da ufficio', build: 'officeChair', w: 60, d: 60, h: 105, color: '#3b3f45', tucks: true },
   ] },
-  { cat: 'Decorazioni', items: [
+  { cat: 'Tecnologia', items: [
+    { type: 'pc', name: 'PC (monitor e tastiera)', build: 'pc', w: 60, d: 35, h: 45, elev: 75, color: '#2b2b2b' },
+    { type: 'pcTower', name: 'Case PC', build: 'pcTower', w: 21, d: 45, h: 46, color: '#2b2b2b' },
+    { type: 'laptop', name: 'Portatile', build: 'laptop', w: 34, d: 24, h: 22, elev: 75, color: '#b9c0c4' },
+    { type: 'tvWall', name: 'TV a parete', build: 'tvWall', w: 125, d: 5, h: 72, elev: 95, color: '#1d1d1f', wallMount: true },
+  ] },
+  { cat: 'Luci', items: [
+    { type: 'chandelier', name: 'Lampadario', build: 'chandelier', w: 75, d: 75, h: 80, color: '#c9a24a', ceiling: true },
+    { type: 'pendant', name: 'Lampada a sospensione', build: 'pendant', w: 40, d: 40, h: 90, color: '#2b2b2b', ceiling: true },
+    { type: 'pendantGlobe', name: 'Sospensione a sfera', build: 'pendant', shape: 'globe', w: 35, d: 35, h: 80, color: '#f3ead6', ceiling: true },
+    { type: 'pendantRow', name: 'Sospensione tripla (tavolo)', build: 'pendantRow', w: 130, d: 30, h: 90, color: '#2f4a6b', ceiling: true },
+    { type: 'flushLight', name: 'Plafoniera', build: 'flushLight', w: 45, d: 45, h: 10, color: '#ffffff', ceiling: true },
     { type: 'lamp', name: 'Lampada da terra', build: 'lamp', w: 40, d: 40, h: 160, color: '#f3ead6' },
+    { type: 'arcLamp', name: 'Lampada ad arco', build: 'arcLamp', w: 150, d: 40, h: 200, color: '#2b2b2b', hit: 0.25 },
+    { type: 'tripodLamp', name: 'Lampada treppiede', build: 'tripodLamp', w: 55, d: 55, h: 155, color: '#e9e1d3' },
+    { type: 'tableLamp', name: 'Lampada da tavolo', build: 'tableLamp', w: 30, d: 30, h: 45, elev: 50, color: '#d9b44a' },
+    { type: 'fairy', name: 'Luci fairy', build: 'fairyLights', w: 200, d: 4, h: 45, elev: 165, color: '#ffd27a', wallMount: true, noCollide: true },
+    { type: 'fairyCurtain', name: 'Tenda luminosa', build: 'fairyLights', mode: 'curtain', w: 150, d: 4, h: 180, elev: 40, color: '#ffe6a8', wallMount: true, noCollide: true },
+  ] },
+  { cat: 'Decorazioni', items: [
+    { type: 'painting', name: 'Quadro astratto', build: 'painting', art: 'abstract', w: 80, d: 3, h: 60, elev: 140, color: '#2b2b2b', wallMount: true, noCollide: true },
+    { type: 'paintingLand', name: 'Quadro paesaggio', build: 'painting', art: 'landscape', w: 100, d: 3, h: 70, elev: 135, color: 'wood:oak', wallMount: true, noCollide: true },
+    { type: 'poster', name: 'Poster', build: 'poster', art: 'poster', w: 50, d: 1, h: 70, elev: 130, color: '#ffffff', wallMount: true, noCollide: true },
+    { type: 'mandala', name: 'Arazzo mandala', build: 'tapestry', art: 'mandala', w: 130, d: 3, h: 150, elev: 70, color: 'wood:oak', wallMount: true, noCollide: true },
+    { type: 'mirror', name: 'Specchio', build: 'mirror', w: 60, d: 3, h: 90, elev: 110, color: 'wood:oak', wallMount: true, noCollide: true },
+    { type: 'mirrorRound', name: 'Specchio rotondo', build: 'mirror', round: true, w: 60, d: 3, h: 60, elev: 130, color: '#c9a24a', wallMount: true, noCollide: true },
+    { type: 'clock', name: 'Orologio da parete', build: 'clock', w: 35, d: 5, h: 35, elev: 180, color: '#2b2b2b', wallMount: true, noCollide: true },
+    { type: 'wallShelf', name: 'Mensola con libri', build: 'wallShelf', w: 80, d: 22, h: 30, elev: 150, color: 'wood:oak', wallMount: true },
+    { type: 'flowers', name: 'Vaso con fiori', build: 'flowers', w: 25, d: 25, h: 50, elev: 75, color: '#dfe7ea' },
+  ] },
+  { cat: 'Tappeti', items: [
+    { type: 'rug', name: 'Tappeto', build: 'rug', w: 200, d: 140, h: 1, color: '#9c8f7c', noCollide: true },
+    { type: 'rugPersian', name: 'Tappeto persiano', build: 'patternRug', art: 'persian', w: 200, d: 300, h: 1, color: '#8b2f2f', noCollide: true },
+    { type: 'rugBerber', name: 'Tappeto berbero', build: 'patternRug', art: 'berber', w: 160, d: 230, h: 2, color: '#efe7d8', noCollide: true },
+    { type: 'rugKilim', name: 'Tappeto kilim', build: 'patternRug', art: 'kilim', w: 140, d: 200, h: 1, color: '#c56b45', noCollide: true },
+    { type: 'runner', name: 'Passatoia', build: 'patternRug', art: 'kilim', w: 70, d: 250, h: 1, color: '#2f4a6b', noCollide: true },
+    { type: 'rugRound', name: 'Tappeto rotondo', build: 'roundRug', w: 150, d: 150, h: 1, color: '#d9d6cf', noCollide: true },
+    { type: 'rugMandala', name: 'Tappeto mandala', build: 'roundRug', art: 'mandala', w: 160, d: 160, h: 1, color: '#24304f', noCollide: true },
+  ] },
+  { cat: 'Piante', items: [
     { type: 'plant', name: 'Pianta', build: 'plant', w: 45, d: 45, h: 110, color: '#c56b45' },
+    { type: 'monstera', name: 'Monstera', build: 'monstera', w: 80, d: 80, h: 120, color: '#f2f0eb' },
+    { type: 'snakePlant', name: 'Sansevieria', build: 'snakePlant', w: 35, d: 35, h: 90, color: '#3b3f45' },
+    { type: 'palm', name: 'Palma areca', build: 'palm', w: 90, d: 90, h: 170, color: '#e9e1d3' },
+    { type: 'ficus', name: 'Ficus lyrata', build: 'indoorTree', w: 60, d: 60, h: 180, color: '#b8735a' },
+    { type: 'oliveIndoor', name: 'Ulivo in vaso', build: 'indoorTree', leaf: 'olive', w: 70, d: 70, h: 170, color: '#e9e1d3' },
+    { type: 'fern', name: 'Felce', build: 'fern', w: 60, d: 60, h: 65, color: '#5b5f63' },
+    { type: 'cactus', name: 'Cactus', build: 'cactus', w: 35, d: 35, h: 90, color: '#c56b45' },
+    { type: 'succulents', name: 'Piante grasse', build: 'succulents', w: 30, d: 30, h: 15, elev: 75, color: '#e9e1d3' },
+    { type: 'bonsai', name: 'Bonsai', build: 'bonsai', w: 35, d: 25, h: 35, elev: 75, color: '#3b3f45' },
+    { type: 'hangingPlant', name: 'Pianta pendente', build: 'hangingPlant', w: 45, d: 45, h: 110, color: '#f2f0eb', ceiling: true },
+  ] },
+  { cat: 'Musica', items: [
+    { type: 'guitarWall', name: 'Chitarra a parete', build: 'guitarWall', w: 40, d: 14, h: 100, elev: 95, color: '#c9a57a', wallMount: true },
+    { type: 'guitarStand', name: 'Chitarra su supporto', build: 'guitarStand', w: 42, d: 45, h: 105, color: '#c9a57a' },
+    { type: 'eGuitarWall', name: 'Chitarra elettrica a parete', build: 'guitarWall', electric: true, w: 35, d: 10, h: 100, elev: 95, color: '#8b2f2f', wallMount: true },
+    { type: 'eGuitarStand', name: 'Chitarra elettrica su supporto', build: 'guitarStand', electric: true, w: 38, d: 45, h: 102, color: '#2f4a6b' },
+    { type: 'pianoDigital', name: 'Pianoforte digitale', build: 'pianoDigital', w: 135, d: 35, h: 90, color: '#2b2b2b' },
+    { type: 'piano', name: 'Pianoforte verticale', build: 'pianoUpright', w: 150, d: 60, h: 125, color: '#1d1d1f' },
+    { type: 'drums', name: 'Batteria', build: 'drums', w: 160, d: 130, h: 120, color: '#8b2f2f' },
+    { type: 'amp', name: 'Amplificatore', build: 'amp', w: 50, d: 26, h: 45, color: '#2b2b2b' },
+  ] },
+  { cat: 'Animali', items: [
+    { type: 'dogBed', name: 'Cuccia cane', build: 'petBed', w: 90, d: 70, h: 22, color: '#7d8a96' },
+    { type: 'catBed', name: 'Cuccia gatto', build: 'petBed', w: 50, d: 50, h: 18, color: '#e8b7a8' },
+    { type: 'catTree', name: 'Tiragraffi', build: 'catTree', w: 55, d: 55, h: 150, color: '#e9e1d3' },
+    { type: 'bowls', name: 'Ciotole', build: 'bowls', w: 40, d: 22, h: 8, color: '#c0c4c6', noCollide: true },
+    { type: 'litterBox', name: 'Lettiera gatto', build: 'litterBox', w: 50, d: 40, h: 40, color: '#b9c0c4' },
+    { type: 'aquarium', name: 'Acquario', build: 'aquarium', w: 100, d: 40, h: 130, color: 'wood:walnut' },
+    { type: 'dogHouse', name: 'Casetta cane (fuori)', build: 'dogHouse', w: 80, d: 100, h: 85, color: 'wood:oak', outdoor: true },
+  ] },
+  { cat: 'Giardino', items: [
+    { type: 'tree', name: 'Albero', build: 'tree', w: 350, d: 350, h: 500, color: '#6e5a46', outdoor: true, hit: 0.1 },
+    { type: 'olive', name: 'Ulivo', build: 'tree', leaf: 'olive', w: 300, d: 300, h: 350, color: '#7d6e5e', outdoor: true, hit: 0.1 },
+    { type: 'cypress', name: 'Cipresso', build: 'cypress', w: 90, d: 90, h: 450, color: '#6e5a46', outdoor: true, hit: 0.3 },
+    { type: 'bush', name: 'Cespuglio', build: 'bush', w: 90, d: 90, h: 80, color: '#4f7f3f', outdoor: true },
+    { type: 'lavender', name: 'Lavanda in fioriera', build: 'lavender', w: 100, d: 40, h: 60, color: '#b5674a', outdoor: true },
+    { type: 'flowerBed', name: 'Aiuola fiorita', build: 'flowerBed', w: 200, d: 70, h: 30, color: '#b5674a', outdoor: true },
+    { type: 'raisedBed', name: 'Orto rialzato', build: 'raisedBed', w: 120, d: 80, h: 45, color: 'wood:oak', outdoor: true },
+    { type: 'gardenTable', name: 'Tavolo da giardino', build: 'table', w: 160, d: 90, h: 75, color: '#5b5f63', outdoor: true, openBelow: true },
+    { type: 'gardenChair', name: 'Sedia da giardino', build: 'chair', w: 50, d: 52, h: 85, color: '#56704f', outdoor: true, tucks: true },
+    { type: 'sunLounger', name: 'Lettino prendisole', build: 'sunLounger', w: 70, d: 195, h: 40, color: '#f2f0eb', outdoor: true },
+    { type: 'parasol', name: 'Ombrellone', build: 'parasol', w: 260, d: 260, h: 245, color: '#e9e1d3', outdoor: true, hit: 0.15 },
+    { type: 'bench', name: 'Panchina', build: 'bench', w: 150, d: 60, h: 80, color: 'wood:oak', outdoor: true },
+    { type: 'bbq', name: 'Barbecue', build: 'bbq', w: 100, d: 60, h: 105, color: '#2b2b2b', outdoor: true },
+    { type: 'pool', name: 'Piscina', build: 'pool', w: 600, d: 300, h: 30, color: '#3fa7c9', outdoor: true },
+    { type: 'lampPost', name: 'Lampione da giardino', build: 'lampPost', w: 30, d: 30, h: 190, color: '#2b2b2b', outdoor: true },
+    { type: 'shed', name: 'Casetta attrezzi', build: 'shed', w: 200, d: 160, h: 230, color: '#8a9a7b', outdoor: true },
+    { type: 'pergola', name: 'Pergola', build: 'pergola', w: 350, d: 300, h: 250, color: 'wood:oak', outdoor: true, hit: 'posts' },
   ] },
   { cat: 'Porte e finestre', items: [
     { type: 'door', name: 'Porta', build: 'door', w: 80, d: 10, h: 210, color: '#f2f0eb', opening: true },
@@ -472,7 +567,7 @@ for (const c of CATALOG) for (const it of c.items) TYPES[it.type] = { ...it, cat
 export function buildModel(item) {
   const def = TYPES[item.type];
   const g = new THREE.Group();
-  B[def.build](g, item.w / 100, item.d / 100, item.h / 100, item.color);
+  B[def.build](g, item.w / 100, item.d / 100, item.h / 100, item.color, item);
   return g;
 }
 
