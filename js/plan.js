@@ -261,7 +261,7 @@ export function moveWallOp(st, wallId, delta) {
       } else o.b = N2.id;
     }
     w[end] = N2.id;
-    st.walls.push({ id: uid('w'), a: N.id, b: N2.id, type: w.type, t: w.t, h: w.h, bulge: 0 });
+    st.walls.push({ id: uid('w'), a: N.id, b: N2.id, type: w.type, t: w.t, h: w.h, bulge: 0, ...(w.style ? { style: w.style } : {}) });
   }
   cleanup(st);
 }
@@ -310,7 +310,7 @@ export function roundCorner(st, nodeId, r) {
   const phi = Math.PI - info.theta;
   const side = Math.sign(G.dot(G.sub(N, A), G.left(G.norm(G.sub(B, A))))) || 1;
   const bulge = side * r * (1 - Math.cos(phi / 2));
-  st.walls.push({ id: uid('w'), a, b, type: w1.type, t: w1.t, h: w1.h, bulge });
+  st.walls.push({ id: uid('w'), a, b, type: w1.type, t: w1.t, h: w1.h, bulge, ...(w1.style ? { style: w1.style } : {}) });
   cleanup(st);
   return true;
 }

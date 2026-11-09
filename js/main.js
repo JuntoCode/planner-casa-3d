@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { CATALOG, TYPES, SWATCHES, buildModel } from './catalog.js';
-import { FLOORS, TILE_M, floorTexture } from './textures.js';
+import { CATALOG, TYPES, SWATCHES, WOOD_SWATCHES, STYLES, styleColor, baseColor, isWood, buildModel } from './catalog.js';
+import { FLOORS, TILE_M, WOODS, floorTexture, woodTexture } from './textures.js';
+import { ENVIRONMENTS, createEnvironment } from './env.js';
 import { PRESETS } from './presets.js';
 import { createWizard } from './wizard.js';
 import * as G from './geometry.js';
@@ -55,6 +56,7 @@ function normalize(d) {
     wallH: +s.wallH || 270,
     wallT: +s.wallT || 10,
     snap: +s.snap || 5,
+    env: ENVIRONMENTS[s.env ?? d.env] ? (s.env ?? d.env) : 'country',
     nodes: s.nodes.filter(n => isFinite(n.x) && isFinite(n.z)).map(n => ({ id: String(n.id), x: +n.x, z: +n.z })),
     walls: [],
     rooms: (s.rooms || []).map(m => ({ ...Plan.newMeta(), ...m, type: Plan.ROOM_TYPES[m.type] ? m.type : 'other', floor: FLOORS[m.floor] ? m.floor : 'parquet' })),
@@ -64,6 +66,7 @@ function normalize(d) {
   out.walls = s.walls.filter(w => ids.has(w.a) && ids.has(w.b)).map(w => ({
     id: String(w.id), a: w.a, b: w.b, type: Plan.WALL_TYPES[w.type] ? w.type : 'wall',
     t: w.t == null ? null : +w.t, h: w.h == null ? null : +w.h, bulge: +w.bulge || 0,
+    ...(w.type === 'railing' ? { style: RAIL_STYLES[w.style] ? w.style : 'glass' } : {}),
   }));
   out.items = (s.items || []).filter(i => TYPES[i?.type]).map(i => {
     const t = TYPES[i.type];
@@ -175,7 +178,7 @@ sun.shadow.bias = -0.0003;
 sun.shadow.normalBias = 0.02;
 scene.add(sun, sun.target);
 
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: '#dde1e5', roughness: 1 }));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: '#dde1e5', roughness: 1 }));
 ground.rotation.x = -Math.PI / 2;
 ground.position.y = -0.01;
 ground.receiveShadow = true;
@@ -183,6 +186,7 @@ scene.add(ground);
 const grid = new THREE.GridHelper(80, 160, '#c3cad1', '#d3d9de');
 grid.position.y = -0.006;
 scene.add(grid);
+const environment = createEnvironment(scene, ground, grid);
 
 const floorsG = new THREE.Group();
 const wallsG = new THREE.Group();
@@ -200,9 +204,9 @@ scene.add(indoorLight);
 scene.add(floorsG, wallsG, itemsG, overlayG, handlesG, hoverG, drawG, ceilingsG);
 const itemObjs = new Map();
 
-const persp = new THREE.PerspectiveCamera(45, 1, 0.05, 300);
+const persp = new THREE.PerspectiveCamera(45, 1, 0.05, 700);
 const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
-const walkCam = new THREE.PerspectiveCamera(70, 1, 0.05, 300);
+const walkCam = new THREE.PerspectiveCamera(70, 1, 0.05, 700);
 let orthoHalf = 5;
 let camera = persp;
 let controls;
@@ -276,7 +280,12 @@ function setView(v) {
   } else fitView();
   document.querySelectorAll('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   sun.castShadow = v !== '2d'; // shadows only clutter the floor plan
+  updateEnv();
   updateOverlay();
+}
+
+function updateEnv() {
+  environment.apply(state.env, bounds(), camera === ortho);
 }
 
 function updateSun() {
@@ -287,6 +296,7 @@ function updateSun() {
   const c = sun.shadow.camera;
   c.left = -s; c.right = s; c.top = s; c.bottom = -s; c.near = 0.5; c.far = s * 6 + 10;
   c.updateProjectionMatrix();
+  updateEnv();
 }
 
 // ---------- building the scene ----------
@@ -403,6 +413,69 @@ const wallMats = {
 };
 Object.values(wallMats).forEach(m => { m.userData.shared = true; });
 
+const RAIL_STYLES = { glass: 'Vetro', bars: 'Sbarre', wood: 'Legno', wall: 'Muretto' };
+const railMats = {
+  wood: new THREE.MeshStandardMaterial({ map: woodTexture('oak'), roughness: 0.7 }),
+  plaster: new THREE.MeshStandardMaterial({ color: '#efebe4', roughness: 0.95 }),
+  stone: new THREE.MeshStandardMaterial({ color: '#c9c2b6', roughness: 0.8 }),
+};
+Object.values(railMats).forEach(m => { m.userData.shared = true; });
+
+// Points every `step` cm along a path, with the local direction.
+function along(path, step) {
+  const out = [];
+  let carry = step / 2;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i], len = G.dist(a, b), d = G.norm(G.sub(b, a));
+    let s = carry;
+    for (; s < len; s += step) out.push({ p: G.add(a, G.mul(d, s)), d });
+    carry = s - len; // distance into the next segment
+  }
+  return out;
+}
+
+function buildRailing(g, w, o, H) {
+  const style = w.style || 'glass';
+  const band = (half, y0, y1, mat, path = o.path) => {
+    const L = G.offsetPath(path, half), R = G.offsetPath(path, -half);
+    const m = new THREE.Mesh(prism([...L, ...R.reverse()], y0, y1), Array.isArray(mat) ? mat : [mat, mat]);
+    m.castShadow = true;
+    g.add(m);
+  };
+  const posts = (points, size, y0, y1, mat) => {
+    if (!points.length) return;
+    const geo = new THREE.BoxGeometry(size / 100, (y1 - y0) / 100, size / 100);
+    const inst = new THREE.InstancedMesh(geo, mat, points.length);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+    points.forEach(({ p, d }, i) => {
+      q.setFromAxisAngle(up, Math.atan2(-d[1], d[0]));
+      m4.compose(new THREE.Vector3(p[0] / 100, (y0 + y1) / 200, p[1] / 100), q, new THREE.Vector3(1, 1, 1));
+      inst.setMatrixAt(i, m4);
+    });
+    inst.castShadow = true;
+    g.add(inst);
+  };
+  if (style === 'glass') {
+    band(1, 0, H - 6, wallMats.glass);
+    const rail = new THREE.Mesh(prism([...o.L, ...[...o.R].reverse()], H - 6, H), [wallMats.metal, wallMats.metal]);
+    rail.castShadow = true;
+    g.add(rail);
+  } else if (style === 'bars') {
+    band(2.5, H - 5, H, wallMats.metal);
+    band(2, 6, 10, wallMats.metal);
+    posts(along(o.path, 11), 1.6, 10, H - 5, wallMats.metal);
+  } else if (style === 'wood') {
+    band(4, H - 7, H, railMats.wood);
+    for (const y of [14, 38, 62]) band(1.5, y, y + 12, railMats.wood);
+    const pts = along(o.path, 100);
+    pts.push({ p: o.path[0], d: G.norm(G.sub(o.path[1], o.path[0])) }, { p: o.path[o.path.length - 1], d: G.norm(G.sub(o.path[o.path.length - 1], o.path[o.path.length - 2])) });
+    posts(pts, 8, 0, H - 7, railMats.wood);
+  } else {
+    band(7, 0, H - 5, [railMats.stone, railMats.plaster]);
+    band(9, H - 5, H, railMats.stone);
+  }
+}
+
 function rebuildWalls() {
   clearGroup(wallsG);
   const outlines = wallOutlines();
@@ -425,11 +498,7 @@ function rebuildWalls() {
     }
     const H = wallTopOf(w);
     if (w.type === 'railing') {
-      const gl = G.offsetPath(o.path, 1), gr = G.offsetPath(o.path, -1);
-      const glass = new THREE.Mesh(prism([...gl, ...gr.reverse()], 0, H - 6), wallMats.glass);
-      const rail = new THREE.Mesh(prism([...o.L, ...[...o.R].reverse()], H - 6, H), [wallMats.metal, wallMats.metal]);
-      rail.castShadow = true;
-      g.add(glass, rail);
+      buildRailing(g, w, o, H);
       continue;
     }
     // Solid wall, made of pieces around its doors and windows.
@@ -647,6 +716,7 @@ function rebuildAll() {
   renderPlanTab();
   renderList();
   $('#projectName').value = state.name;
+  $('#envMode').value = state.env;
 }
 
 // ---------- collisions + overlay ----------
@@ -1539,6 +1609,17 @@ function makeThumbs() {
 
 // ---------- UI: properties panel ----------
 
+// A color dot; wood finishes are drawn with a grain stripe.
+function swatchBg(c) {
+  return isWood(c)
+    ? `repeating-linear-gradient(100deg, ${baseColor(c)} 0 4px, ${new THREE.Color(baseColor(c)).offsetHSL(0, 0, -0.08).getStyle()} 4px 5px)`
+    : c;
+}
+function swatch(c, current) {
+  const title = isWood(c) ? WOODS[c.slice(5)].label : c;
+  return `<button class="sw${c === current ? ' on' : ''}" data-color="${c}" style="background:${swatchBg(c)}" title="${title}"></button>`;
+}
+
 const numField = (k, label, v, unit = 'cm', step = 1, extra = '') =>
   `<label class="field"><span>${label}</span><div class="unit"><input type="number" data-k="${k}" value="${Math.round(v * 10) / 10}" step="${step}" ${extra}><em>${unit}</em></div></label>`;
 
@@ -1571,9 +1652,12 @@ function renderProps() {
             <button data-rot="15">+15°</button>
             <button data-rot="90" title="Ruota 90° (R)">↻ 90°</button>
           </div></div>`}
+      <div class="field"><span>Legno</span><div class="swatches">
+        ${WOOD_SWATCHES.map(c => swatch(c, it.color)).join('')}
+      </div></div>
       <div class="field"><span>Colore</span><div class="swatches">
-        ${SWATCHES.map(c => `<button class="sw${c === it.color ? ' on' : ''}" data-color="${c}" style="background:${c}" title="${c}"></button>`).join('')}
-        <input type="color" data-k="color" value="${it.color}" title="Colore personalizzato">
+        ${SWATCHES.map(c => swatch(c, it.color)).join('')}
+        <input type="color" data-k="color" value="${baseColor(it.color)}" title="Colore personalizzato">
       </div></div>
       <div class="actions">
         <button data-act="dup">Duplica <kbd>Ctrl D</kbd></button>
@@ -1624,6 +1708,9 @@ function renderProps() {
         ${w.type === 'divider' ? '' : numField('t', 'Spessore', Plan.wallThickness(state, w))}
         ${w.type === 'divider' ? '' : numField('h', 'Altezza', Plan.wallHeight(state, w))}
       </div>
+      ${w.type === 'railing' ? `<div class="field"><span>Stile ringhiera</span><div class="seg wide-seg">
+        ${Object.entries(RAIL_STYLES).map(([k, v]) => `<button data-rstyle="${k}" class="${k === (w.style || 'glass') ? 'on' : ''}">${v}</button>`).join('')}
+      </div></div>` : ''}
       <div class="field"><span>Curvatura ${hasOps ? '<small>(togli porte e finestre per curvarlo)</small>' : ''}</span>
         <div class="row curve-row">
           <input type="range" data-k="bulge" min="${-Math.round(chord / 2)}" max="${Math.round(chord / 2)}" step="5" value="${Math.round(w.bulge || 0)}" ${hasOps ? 'disabled' : ''}>
@@ -1726,9 +1813,16 @@ $('#props').addEventListener('click', e => {
   } else if (b.dataset.act === 'round') confirmCorner(parseFloat($('#props input[type=number][data-k=radius]').value));
   else if (b.dataset.rot) rotateSelection(+b.dataset.rot);
   else if (b.dataset.color) applyProp('color', b.dataset.color);
-  else if (b.dataset.wtype) {
+  else if (b.dataset.rstyle) {
+    getWall(selection.id).style = b.dataset.rstyle;
+    rebuildWalls();
+    updateOverlay();
+    commit();
+    renderProps();
+  } else if (b.dataset.wtype) {
     const w = getWall(selection.id);
     w.type = b.dataset.wtype;
+    if (w.type === 'railing') w.style ??= 'glass';
     w.t = null; w.h = null;
     if (w.type !== 'wall') state.items = state.items.filter(it => it.wall !== w.id);
     rebuildItems();
@@ -1847,7 +1941,7 @@ function renderList() {
         return `<li data-select="${it.id}" class="${selection?.id === it.id ? 'on' : ''}">
           <img data-thumb="${it.type}" src="${THUMBS[it.type] || ''}" alt="">
           <span><b>${t.name}</b><small>${Math.round(it.w)}×${Math.round(t.opening ? it.h : it.d)} cm${room ? ' · ' + esc(room.meta.name) : ''}</small></span>
-          <i class="dot" style="background:${it.color}"></i>
+          <i class="dot" style="background:${swatchBg(it.color)}"></i>
         </li>`;
       }).join('')}</ul>` : '<p class="empty">Ancora nessun mobile. Aggiungine uno dalla scheda Mobili.</p>'}
     </div>`;
@@ -1872,6 +1966,28 @@ document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click
 document.querySelectorAll('#tools button').forEach(b => b.addEventListener('click', () => { setTool(b.dataset.tool); renderPlanTab(); }));
 
 document.querySelectorAll('#viewSeg button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+$('#envMode').addEventListener('change', e => {
+  state.env = e.target.value;
+  updateEnv();
+  commit();
+});
+$('#styleBar').addEventListener('click', e => {
+  const b = e.target.closest('[data-style]');
+  if (!b) return;
+  let n = 0;
+  for (const it of state.items) {
+    const c = styleColor(b.dataset.style, it.type);
+    if (c && c !== it.color) { it.color = c; n++; }
+  }
+  rebuildItems();
+  updateOverlay();
+  renderProps();
+  renderList();
+  commit();
+  toast(`Stile “${STYLES[b.dataset.style].label}” applicato a ${n} elementi. Ctrl+Z per annullare.`);
+});
+$('#styleBar').innerHTML = `<span>Stile</span>${Object.entries(STYLES).map(([k, s]) =>
+  `<button data-style="${k}" title="Ricolora tutti i mobili in stile ${s.label}"><i style="background:${swatchBg(s.wood)}"></i><i style="background:${swatchBg(s.soft)}"></i>${s.label}</button>`).join('')}`;
 $('#wallMode').addEventListener('change', e => {
   wallMode = e.target.value;
   rebuildWalls();

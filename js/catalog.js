@@ -1,14 +1,23 @@
 import * as THREE from 'three';
+import { WOODS, woodTexture } from './textures.js';
 
 // Furniture catalog. Every model is built from primitives so it scales to any
 // size the user types. Builders get sizes in meters; local axes:
 // x = width (centered), z = depth (centered, front faces +z), y = up from 0.
+// A color is either a hex value or a wood finish such as "wood:oak".
+
+export const isWood = c => typeof c === 'string' && c.startsWith('wood:');
+export const baseColor = c => (isWood(c) ? WOODS[c.slice(5)]?.base || '#c49a6c' : c);
 
 const matCache = new Map();
 export function mat(color, opts = {}) {
   const key = color + JSON.stringify(opts);
   if (!matCache.has(key)) {
-    matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0, ...opts }));
+    const m = isWood(color)
+      ? new THREE.MeshStandardMaterial({ map: woodTexture(color.slice(5)), roughness: 0.62, metalness: 0, ...opts })
+      : new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0, ...opts });
+    m.userData.shared = true; // cached: scene cleanup must not dispose it
+    matCache.set(key, m);
   }
   return matCache.get(key);
 }
@@ -18,7 +27,7 @@ const METAL = { metalness: 0.6, roughness: 0.35 };
 const DARK = '#2b2b2b';
 const WHITE = '#f4f3ef';
 
-const shade = (c, l) => '#' + new THREE.Color(c).offsetHSL(0, 0, l).getHexString();
+const shade = (c, l) => '#' + new THREE.Color(baseColor(c)).offsetHSL(0, 0, l).getHexString();
 
 function box(g, w, h, d, color, x = 0, y = 0, z = 0, opts) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, opts));
@@ -197,6 +206,29 @@ const B = {
     box(g, w, h, d, c, 0, 0, 0);
     doorLines(g, w, h, d, Math.max(1, Math.round(w / 0.6)), 0, 0.1);
   },
+  // Wall cabinet with a slim pull-out hood underneath.
+  hoodCabinet(g, w, d, h, c) {
+    const hh = 0.12;
+    box(g, w, h - hh, d, c, 0, hh, 0);
+    doorLines(g, w, h - hh, d, Math.max(1, Math.round(w / 0.6)), hh, hh + 0.1);
+    box(g, w - 0.01, hh - 0.01, d - 0.02, '#c0c4c6', 0, 0.01, -0.01, METAL);
+    box(g, w - 0.01, 0.04, 0.03, '#a7abae', 0, 0.01, d / 2 + 0.005, METAL);
+    box(g, w - 0.1, 0.005, d - 0.1, '#3a3d40', 0, 0.006, -0.02);
+    for (const s of [-1, 1]) cyl(g, 0.03, 0.03, 0.004, '#fff6dc', s * w * 0.25, 0.004, 0.02, { emissive: '#fff1c9', emissiveIntensity: 0.8 }, 16);
+  },
+  // Chimney hood: a tapered canopy and a flue going up to the ceiling.
+  chimneyHood(g, w, d, h, c) {
+    const canopy = 0.28;
+    box(g, w, 0.05, d, c, 0, 0, 0, METAL);
+    box(g, w - 0.06, 0.004, d - 0.06, '#3a3d40', 0, -0.002, 0);
+    const taper = new THREE.Group();
+    taper.scale.set(w, 1, d);
+    g.add(taper);
+    const top = 0.34 / Math.max(w, d);
+    const m = cyl(taper, top / Math.SQRT2, 1 / Math.SQRT2, canopy - 0.05, c, 0, 0.05, 0, METAL, 4);
+    m.rotation.y = Math.PI / 4;
+    box(g, 0.3, Math.max(0.1, h - canopy), 0.26, c, 0, canopy, -d / 2 + 0.13, METAL);
+  },
   fridge(g, w, d, h, c) {
     box(g, w, h, d, c, 0, 0, 0, { roughness: 0.35 });
     box(g, w - 0.01, 0.006, 0.004, '#999', 0, h * 0.62, d / 2 + 0.002);
@@ -253,7 +285,7 @@ const B = {
   lamp(g, w, d, h, c) {
     cyl(g, w * 0.4, w * 0.45, 0.03, DARK, 0, 0, 0);
     cyl(g, 0.012, 0.012, h - 0.3, DARK, 0, 0.03, 0, METAL);
-    cyl(g, w * 0.3, w * 0.5, 0.3, c, 0, h - 0.3, 0, { emissive: c, emissiveIntensity: 0.25, side: THREE.DoubleSide }, 32);
+    cyl(g, w * 0.3, w * 0.5, 0.3, c, 0, h - 0.3, 0, { emissive: baseColor(c), emissiveIntensity: 0.25, side: THREE.DoubleSide }, 32);
   },
   plant(g, w, d, h, c) {
     cyl(g, w * 0.35, w * 0.28, h * 0.3, c, 0, 0, 0);
@@ -356,7 +388,9 @@ export const CATALOG = [
     { type: 'kitchenBase', name: 'Base cucina', build: 'kitchenBase', w: 60, d: 62, h: 90, color: '#e9e6df' },
     { type: 'sinkUnit', name: 'Lavello', build: 'sinkUnit', w: 80, d: 62, h: 90, color: '#e9e6df' },
     { type: 'hobUnit', name: 'Piano cottura + forno', build: 'hobUnit', w: 60, d: 62, h: 90, color: '#e9e6df' },
-    { type: 'wallCabinet', name: 'Pensile', build: 'wallCabinet', w: 60, d: 35, h: 70, elev: 145, color: '#e9e6df', noCollideLow: true },
+    { type: 'wallCabinet', name: 'Pensile', build: 'wallCabinet', w: 60, d: 35, h: 70, elev: 145, color: '#e9e6df' },
+    { type: 'hoodCabinet', name: 'Pensile con cappa', build: 'hoodCabinet', w: 60, d: 35, h: 70, elev: 145, color: '#e9e6df' },
+    { type: 'chimneyHood', name: 'Cappa a camino', build: 'chimneyHood', w: 90, d: 50, h: 100, elev: 150, color: '#c0c4c6' },
     { type: 'fridge', name: 'Frigorifero', build: 'fridge', w: 60, d: 65, h: 185, color: '#e6e8ea' },
   ] },
   { cat: 'Bagno', items: [
@@ -399,4 +433,27 @@ export function buildModel(item) {
   return g;
 }
 
-export const SWATCHES = ['#ffffff', '#f2f0eb', '#e8dcc6', '#c9a57a', '#8a6a4a', '#4a3a2c', '#2b2b2b', '#7d8a96', '#3f5e7a', '#8a9a7b', '#b8735a', '#d9b44a'];
+export const WOOD_SWATCHES = Object.keys(WOODS).map(k => 'wood:' + k);
+export const SWATCHES = [
+  '#ffffff', '#f2f0eb', '#e9e1d3', '#d9d6cf', '#b9c0c4', '#7d8a96', '#5b5f63', '#2b2b2b',
+  '#2f4a6b', '#3f5e7a', '#4f8a8b', '#8a9a7b', '#56704f', '#d9b44a', '#c56b45', '#b8735a', '#e8b7a8', '#9b5c7a',
+];
+
+// Furnishing styles: each piece takes the color of its group.
+const STYLE_GROUP = {
+  table: 'wood', roundTable: 'wood', coffeeTable: 'wood', chair: 'wood', desk: 'wood', bookshelf: 'wood',
+  nightstand: 'wood', tvStand: 'wood', washbasin: 'wood',
+  dresser: 'cabinet', wardrobe: 'cabinet',
+  kitchenBase: 'kitchen', sinkUnit: 'kitchen', hobUnit: 'kitchen', wallCabinet: 'kitchen', hoodCabinet: 'kitchen',
+  sofa3: 'soft', sofa2: 'soft', officeChair: 'soft', armchair: 'accent', bed2: 'bed', bed1: 'bed',
+  rug: 'rug', door: 'door', door90: 'door',
+};
+export const STYLES = {
+  legno: { label: 'Legno naturale', wood: 'wood:oak', cabinet: 'wood:oak', kitchen: 'wood:oak', soft: '#a39382', accent: '#b8735a', bed: 'wood:oak', rug: '#9c8f7c', door: 'wood:oak' },
+  minimal: { label: 'Minimal', wood: '#f2f0eb', cabinet: '#ffffff', kitchen: '#ffffff', soft: '#d9d6cf', accent: '#b9c0c4', bed: '#f2f0eb', rug: '#d9d6cf', door: '#ffffff' },
+  scandi: { label: 'Scandinavo', wood: 'wood:ash', cabinet: '#f2f0eb', kitchen: '#f2f0eb', soft: '#b9c0c4', accent: '#e9e1d3', bed: 'wood:ash', rug: '#e9e1d3', door: '#f2f0eb' },
+  classico: { label: 'Classico', wood: 'wood:walnut', cabinet: '#e9e1d3', kitchen: '#e9e1d3', soft: '#7d5a44', accent: '#8b3a3a', bed: 'wood:walnut', rug: '#8b5a4a', door: 'wood:walnut' },
+  industriale: { label: 'Industriale', wood: 'wood:wenge', cabinet: '#3b3f45', kitchen: '#5b5f63', soft: '#5b5f63', accent: '#8a5a3c', bed: '#3b3f45', rug: '#7a7069', door: '#3b3f45' },
+  colori: { label: 'Colorato', wood: 'wood:oak', cabinet: '#f2f0eb', kitchen: '#56704f', soft: '#2f4a6b', accent: '#d9b44a', bed: '#e8b7a8', rug: '#c56b45', door: '#f2f0eb' },
+};
+export const styleColor = (style, type) => STYLES[style]?.[STYLE_GROUP[type]] ?? null;

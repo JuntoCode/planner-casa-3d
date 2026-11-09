@@ -160,7 +160,7 @@ export function generateHome(opts) {
       if (z + w > zMax) break;
       const d = type === 'fridge' ? 65 : 62;
       put(type, wallX - 5 - d / 2, z + w / 2, 270);
-      if (type !== 'fridge') put('wallCabinet', wallX - 5 - 17.5, z + w / 2, 270, { w });
+      if (type !== 'fridge') put(type === 'hobUnit' ? 'hoodCabinet' : 'wallCabinet', wallX - 5 - 17.5, z + w / 2, 270, { w });
       z += w;
     }
   }

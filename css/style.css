@@ -194,6 +194,14 @@ body.rooms-mode .furniture-only { display: none; }
 .primary-soft { background: var(--accent-soft); color: var(--accent); border-color: #cddcf8; font-weight: 600; }
 .primary-soft:hover:not(:disabled) { background: #dce8fc !important; border-color: #b7cdf4 !important; }
 
+/* furnishing styles */
+.style-bar { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-bottom: 10px; }
+.style-bar > span { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; margin-right: 2px; }
+.style-bar button { display: inline-flex; align-items: center; gap: 3px; padding: 4px 9px 4px 5px; border-radius: 99px; font-size: 12px; }
+.style-bar button i { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); }
+.style-bar button i + i { margin-left: -6px; margin-right: 3px; }
+.style-bar button:hover { border-color: var(--accent); }
+
 /* first-person walk */
 .walk-ui { display: none; }
 body.walking .walk-ui { display: block; }
@@ -370,6 +378,7 @@ label.wz-row { cursor: pointer; }
   .status { top: 8px; font-size: 12px; }
   #newBtn { padding: 6px 8px; }
   .tools button { min-width: 0; padding: 7px 8px; }
+  #envMode, #wallMode { max-width: 92px; padding: 6px 4px; }
   .tools button span { display: none; }
   .draw-hint { bottom: 12px; max-width: calc(100% - 80px); left: calc(50% + 28px); }
   .wz-body { grid-template-columns: 1fr; }

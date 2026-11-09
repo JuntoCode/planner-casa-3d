@@ -34,6 +34,11 @@
       <button data-view="2d">Pianta</button>
       <button data-view="walk" title="Cammina in prima persona dentro la casa">Cammina</button>
     </div>
+    <select id="envMode" title="Cosa c'è fuori casa">
+      <option value="country">Fuori: campagna</option>
+      <option value="city">Fuori: città</option>
+      <option value="neutral">Fuori: neutro</option>
+    </select>
     <select id="wallMode" title="Visualizzazione muri">
       <option value="auto">Muri: auto</option>
       <option value="high">Muri: alti</option>
@@ -56,6 +61,7 @@
         <button data-tab="list">Elenco</button>
       </nav>
       <section id="tab-furniture" class="tab on">
+        <div id="styleBar" class="style-bar"></div>
         <input id="search" type="search" placeholder="Cerca: letto, divano, porta…" autocomplete="off">
         <div id="catalog"></div>
       </section>

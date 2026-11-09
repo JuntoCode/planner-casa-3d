@@ -20,6 +20,10 @@ senza build: HTML, CSS e JavaScript modules.
   la porta mostra l'arco di apertura.
 - **Mobili** (~30 elementi tra soggiorno, camera, cucina, bagno, ufficio): dimensioni e colore
   modificabili, rotazione, aggancio alla griglia e ai muri.
+- **Finiture e stili**: legni (rovere, frassino, ciliegio, noce, wengé) e 18 colori; stili con un clic
+  (Legno naturale, Minimal, Scandinavo, Classico, Industriale, Colorato) che ricolorano tutti i mobili.
+- **Ringhiere**: vetro, sbarre, legno o muretto. In cucina anche pensile con cappa e cappa a camino.
+- **Fuori casa**: campagna (prato, alberi, colline), città (strada, palazzi) o neutro.
 - **Controlli**: sovrapposizioni e mobili fuori dai muri vengono segnalati in rosso.
 - **Viste**: 3D con muri che si nascondono verso la camera, pianta 2D dall'alto, muri alti/bassi.
 - **Cammina**: visita in prima persona con soffitti e porte aperte; mouse + `WASD`/frecce (`Shift` per
@@ -60,6 +64,7 @@ Poi apri <http://localhost:8123>.
 - `js/plan.js` – modello a grafo di muri: disegno, riconoscimento stanze e tipo, conversione vecchi progetti
 - `js/geometry.js` – geometria 2D (archi, intersezioni, poligoni)
 - `js/walk.js` – modalità Cammina (prima persona, collisioni)
+- `js/env.js` – ambiente esterno (campagna, città, neutro)
 - `tests/plan.test.mjs` – test del modello: `node tests/plan.test.mjs`
 - `js/generator.js` – genera la piantina dalle risposte del menu guidato
 - `js/wizard.js` – menu "Crea la tua casa" con anteprima

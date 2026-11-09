@@ -108,11 +108,97 @@ export function floorTexture(kind) {
       decking: () => decking(17),
       cotto: () => tiles(3, '#b5674a', '#d8c7b4', 19),
     }[kind] || (() => noise('#cccccc', 0.05, 1));
-    const t = new THREE.CanvasTexture(canvas());
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 8;
-    cache[kind] = t;
+    cache[kind] = toTexture(canvas());
   }
   return cache[kind];
+}
+
+function toTexture(canvas) {
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
+}
+
+// ---- wood finishes for furniture
+
+export const WOODS = {
+  oak: { label: 'Rovere', base: '#c49a6c' },
+  ash: { label: 'Frassino', base: '#e0cba8' },
+  cherry: { label: 'Ciliegio', base: '#9a5a3c' },
+  walnut: { label: 'Noce', base: '#6e4b33' },
+  wenge: { label: 'Wengé', base: '#3e2f25' },
+};
+
+function woodGrain(base, seed) {
+  const [c, g] = makeCanvas(256);
+  const r = rng(seed);
+  g.fillStyle = base;
+  g.fillRect(0, 0, 256, 256);
+  // Long wavy grain lines, darker and lighter.
+  for (let i = 0; i < 70; i++) {
+    const y0 = r() * 256, amp = 2 + r() * 6, freq = 0.01 + r() * 0.02, ph = r() * 6;
+    g.strokeStyle = r() > 0.4 ? `rgba(0,0,0,${0.05 + r() * 0.1})` : `rgba(255,255,255,${0.04 + r() * 0.06})`;
+    g.lineWidth = 0.6 + r() * 1.6;
+    g.beginPath();
+    for (let x = 0; x <= 256; x += 8) {
+      const y = y0 + Math.sin(x * freq + ph) * amp;
+      if (x === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  return c;
+}
+
+export function woodTexture(kind) {
+  const key = 'wood-' + kind;
+  if (!cache[key]) cache[key] = toTexture(woodGrain(WOODS[kind]?.base || '#c49a6c', kind.length * 31 + 7));
+  return cache[key];
+}
+
+// ---- outdoor surfaces
+
+export function groundTexture(kind) {
+  const key = 'ground-' + kind;
+  if (!cache[key]) {
+    const canvas = {
+      grass: () => {
+        const [c, g] = makeCanvas(256);
+        const r = rng(23);
+        g.fillStyle = '#6d8f4c';
+        g.fillRect(0, 0, 256, 256);
+        for (let i = 0; i < 5000; i++) {
+          g.fillStyle = new THREE.Color('#6d8f4c').offsetHSL((r() - 0.5) * 0.04, (r() - 0.5) * 0.1, (r() - 0.5) * 0.14).getStyle();
+          g.fillRect(r() * 256, r() * 256, 1 + r() * 2, 2 + r() * 4);
+        }
+        return c;
+      },
+      paving: () => tiles(6, '#b7b2a9', '#99938a', 31),
+      asphalt: () => noise('#4a4d52', 0.14, 29),
+    }[kind];
+    cache[key] = toTexture(canvas());
+  }
+  return cache[key];
+}
+
+// One bay of a building facade (wall + window); repeated over the walls.
+export function facadeTexture(wall, glass, seed) {
+  const key = `facade-${wall}-${glass}`;
+  if (!cache[key]) {
+    const [c, g] = makeCanvas(64);
+    const r = rng(seed);
+    g.fillStyle = wall;
+    g.fillRect(0, 0, 64, 64);
+    g.fillStyle = 'rgba(0,0,0,0.12)';
+    g.fillRect(14, 46, 36, 3);
+    g.fillStyle = glass;
+    g.fillRect(16, 14, 32, 32);
+    g.fillStyle = `rgba(255,255,255,${0.1 + r() * 0.15})`;
+    g.fillRect(16, 14, 32, 10);
+    g.fillStyle = 'rgba(255,255,255,0.5)';
+    g.fillRect(31, 14, 2, 32);
+    cache[key] = toTexture(c);
+  }
+  return cache[key];
 }
