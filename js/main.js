@@ -879,7 +879,8 @@ function walkColliders() {
       continue;
     }
     const s = solidPart(it);
-    boxes.push({ x: s.x, z: s.z, w: s.w, d: s.d, rot: s.rot });
+    // A little smaller than the footprint: bounding boxes include handles, cushions, legs.
+    boxes.push({ x: s.x, z: s.z, w: Math.max(8, s.w - 4), d: Math.max(8, s.d - 4), rot: s.rot });
   }
   return { segs, boxes };
 }

@@ -6,7 +6,7 @@ import * as G from './geometry.js';
 // Positions are in cm on the floor plan; the camera works in meters.
 
 const EYE = 1.6;        // eye height, m
-const RADIUS = 25;      // body radius, cm
+const RADIUS = 18;      // body radius, cm: slim enough for a 70 cm door or a tight corridor
 const SPEED = 140;      // cm/s walking
 const RUN = 300;        // cm/s with Shift
 const TURN = 1.8;       // rad/s with the left/right arrows
@@ -30,7 +30,7 @@ export function createWalker({ canvas, camera, colliders, onExit, onUse, baseY =
 
   // Push the body out of walls (segments with a half thickness) and furniture boxes.
   function resolve() {
-    for (let pass = 0; pass < 3; pass++) {
+    for (let pass = 0; pass < 4; pass++) {
       for (const [a, b, h] of solid.segs) {
         const r = G.segDist(pos, a, b);
         const min = RADIUS + h;
@@ -80,8 +80,11 @@ export function createWalker({ canvas, camera, colliders, onExit, onUse, baseY =
       const speed = keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN : SPEED;
       const fwd = [-Math.sin(yaw), -Math.cos(yaw)], right = [Math.cos(yaw), -Math.sin(yaw)];
       const step = speed * dt * k;
-      pos = G.add(pos, G.add(G.mul(fwd, f * step), G.mul(right, s * step)));
-      resolve();
+      const move = G.add(G.mul(fwd, f * step), G.mul(right, s * step));
+      // Small steps, each pushed out of walls and furniture: you slide along a door frame
+      // or a table edge into the gap instead of getting stuck on it.
+      const n = Math.max(1, Math.ceil(Math.hypot(...move) / 5));
+      for (let i = 0; i < n; i++) { pos = G.add(pos, G.mul(move, 1 / n)); resolve(); }
     }
     apply();
   }
