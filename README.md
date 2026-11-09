@@ -22,6 +22,9 @@ senza build: HTML, CSS e JavaScript modules.
   modificabili, rotazione, aggancio alla griglia e ai muri.
 - **Controlli**: sovrapposizioni e mobili fuori dai muri vengono segnalati in rosso.
 - **Viste**: 3D con muri che si nascondono verso la camera, pianta 2D dall'alto, muri alti/bassi.
+- **Cammina**: visita in prima persona con soffitti e porte aperte; mouse + `WASD`/frecce (`Shift` per
+  correre), su telefono trascina a sinistra per camminare e a destra per guardarti intorno.
+  Muri e mobili non si attraversano.
 - **Progetto**: salvataggio automatico nel browser, annulla/ripeti, esporta/importa JSON, foto PNG.
 - Modelli di partenza: trilocale, monolocale, stanza vuota.
 
@@ -56,6 +59,7 @@ Poi apri <http://localhost:8123>.
 - `js/presets.js` – appartamenti di esempio
 - `js/plan.js` – modello a grafo di muri: disegno, riconoscimento stanze e tipo, conversione vecchi progetti
 - `js/geometry.js` – geometria 2D (archi, intersezioni, poligoni)
+- `js/walk.js` – modalità Cammina (prima persona, collisioni)
 - `tests/plan.test.mjs` – test del modello: `node tests/plan.test.mjs`
 - `js/generator.js` – genera la piantina dalle risposte del menu guidato
 - `js/wizard.js` – menu "Crea la tua casa" con anteprima

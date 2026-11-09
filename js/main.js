@@ -7,6 +7,7 @@ import { PRESETS } from './presets.js';
 import { createWizard } from './wizard.js';
 import * as G from './geometry.js';
 import * as Plan from './plan.js';
+import { createWalker } from './walk.js';
 
 // State values are in centimeters; the 3D scene works in meters (cm / 100).
 // The plan is a graph of walls (see plan.js); rooms are found from it.
@@ -27,6 +28,7 @@ let selection = null; // { kind: 'item' | 'room' | 'wall', id }
 let wallMode = 'auto';
 let tab = 'furniture';
 let tool = 'select';
+let walking = false; // first-person walk mode
 const history = { stack: [], index: -1 };
 
 // ---------- state helpers ----------
@@ -40,7 +42,8 @@ const isOpening = it => TYPES[it.type].opening;
 const isDoor = it => ['door', 'arch'].includes(TYPES[it.type].build);
 const fmtM = cm => (cm / 100).toFixed(2).replace('.', ',');
 const m2 = a => (a / 10000).toFixed(1).replace('.', ',');
-const wallTopOf = w => Math.min(Plan.wallHeight(state, w), wallMode === 'low' ? 45 : Infinity);
+const lowWalls = () => wallMode === 'low' && !walking;
+const wallTopOf = w => Math.min(Plan.wallHeight(state, w), lowWalls() ? 45 : Infinity);
 
 function normalize(d) {
   d = d && typeof d === 'object' ? d : {};
@@ -188,11 +191,18 @@ const overlayG = new THREE.Group();
 const handlesG = new THREE.Group();
 const hoverG = new THREE.Group();
 const drawG = new THREE.Group();
-scene.add(floorsG, wallsG, itemsG, overlayG, handlesG, hoverG, drawG);
+const ceilingsG = new THREE.Group(); // only shown while walking
+ceilingsG.visible = false;
+// Indoor light while walking: the ceilings keep the sun out.
+const indoorLight = new THREE.AmbientLight('#fff8ee', 1.1);
+indoorLight.visible = false;
+scene.add(indoorLight);
+scene.add(floorsG, wallsG, itemsG, overlayG, handlesG, hoverG, drawG, ceilingsG);
 const itemObjs = new Map();
 
 const persp = new THREE.PerspectiveCamera(45, 1, 0.05, 300);
 const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
+const walkCam = new THREE.PerspectiveCamera(70, 1, 0.05, 300);
 let orthoHalf = 5;
 let camera = persp;
 let controls;
@@ -224,6 +234,8 @@ function resize() {
   labelRenderer.setSize(w, h);
   persp.aspect = w / h;
   persp.updateProjectionMatrix();
+  walkCam.aspect = w / h;
+  walkCam.updateProjectionMatrix();
   updateOrtho();
 }
 function updateOrtho() {
@@ -234,6 +246,7 @@ function updateOrtho() {
 }
 
 function fitView() {
+  if (walking) return;
   const b = bounds();
   if (camera === persp) {
     const s = Math.max(b.w, b.d, 3);
@@ -251,6 +264,8 @@ function fitView() {
 }
 
 function setView(v) {
+  if (v === 'walk') return enterWalk();
+  if (walking) exitWalk();
   if (camera === persp) view3d = { pos: persp.position.clone(), target: controls.target.clone() };
   camera = v === '2d' ? ortho : persp;
   makeControls();
@@ -316,6 +331,23 @@ function rebuildRooms() {
     const p = r.meta.anchor || G.pole(r.pts);
     lbl.position.set(p[0] / 100, 0.05, p[1] / 100);
     floorsG.add(lbl);
+  }
+  rebuildCeilings();
+}
+
+const ceilingMat = new THREE.MeshStandardMaterial({ color: '#fbfaf7', roughness: 1 });
+ceilingMat.userData.shared = true;
+function rebuildCeilings() {
+  clearGroup(ceilingsG);
+  for (const r of rooms) {
+    if (['terrace', 'balcony'].includes(r.meta.type)) continue;
+    // Facing down: shape in (x, z) and turned +90° so its normal points to the floor.
+    const shape = new THREE.Shape(r.pts.map(([x, z]) => new THREE.Vector2(x / 100, z / 100)));
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), ceilingMat);
+    m.rotation.x = Math.PI / 2;
+    m.position.y = state.wallH / 100 - 0.005;
+    m.receiveShadow = true;
+    ceilingsG.add(m);
   }
 }
 
@@ -476,7 +508,14 @@ function makeItemObj(it) {
   const o = buildModel(it);
   placeObj(o, it);
   o.userData = { kind: 'item', id: it.id };
-  if (wallMode === 'low' && isOpening(it)) o.traverse(c => { if (c.userData.tall) c.visible = false; });
+  if (lowWalls() && isOpening(it)) o.traverse(c => { if (c.userData.tall) c.visible = false; });
+  if (walking) {
+    // Walking: doors stand open so you can go through, without the plan's swing marks.
+    o.traverse(c => {
+      if (c.userData.leaf) c.rotation.y = -Math.PI / 2;
+      if (c.userData.swing) c.visible = false;
+    });
+  }
   return o;
 }
 
@@ -501,6 +540,80 @@ function refreshItem(it) {
 }
 
 // After the walls changed: rooms, floors, walls, doors/windows, overlay.
+// ---------- first-person walk ----------
+
+// What blocks you while walking: solid walls minus their door openings, and furniture.
+function walkColliders() {
+  const nm = Plan.nodeMap(state);
+  const segs = [];
+  for (const w of state.walls) {
+    if (w.type === 'divider') continue;
+    const h = Plan.wallThickness(state, w) / 2;
+    const path = Plan.wallPathOf(state, w, nm);
+    if (w.type !== 'wall' || Plan.isCurved(w)) {
+      for (let i = 1; i < path.length; i++) segs.push([path[i - 1], path[i], h]);
+      continue;
+    }
+    const [A, B] = path, len = G.dist(A, B), d = G.norm(G.sub(B, A));
+    const at = t => G.add(A, G.mul(d, t));
+    // Openings that reach the floor and are tall enough to walk through.
+    const gaps = state.items.filter(it => it.wall === w.id && it.elev < 40 && it.elev + it.h > 180)
+      .map(it => [it.t - it.w / 2 + 6, it.t + it.w / 2 - 6]).sort((a, b) => a[0] - b[0]);
+    let cur = 0;
+    for (const [s, e] of gaps) { if (s > cur) segs.push([at(cur), at(s), h]); cur = Math.max(cur, e); }
+    if (cur < len) segs.push([at(cur), at(len), h]);
+  }
+  const boxes = state.items
+    .filter(it => !isOpening(it) && !TYPES[it.type].noCollide && it.h >= 25 && it.elev < 120)
+    .map(it => ({ x: it.x, z: it.z, w: it.w, d: it.d, rot: it.rot }));
+  return { segs, boxes };
+}
+
+const walker = createWalker({ canvas, camera: walkCam, colliders: walkColliders, onExit: () => setView('3d') });
+
+function enterWalk() {
+  if (walking) return;
+  if (camera === persp) view3d = { pos: persp.position.clone(), target: controls.target.clone() };
+  // Start where the 3D view was looking, if that is inside a room; otherwise in the largest room.
+  const from = view3d || { pos: persp.position, target: controls.target };
+  let start = { x: from.target.x * 100, z: from.target.z * 100 };
+  const indoor = rooms.filter(r => !['terrace', 'balcony'].includes(r.meta.type));
+  const here = indoor.find(r => G.inPoly(start.x, start.z, r.pts));
+  // Corridors and tiny rooms make a poor first view: start in the biggest room instead.
+  if (!here || here.area < 90000 || ['corridor', 'entrance', 'storage'].includes(here.meta.type)) {
+    const big = [...indoor].sort((a, b) => b.area - a.area)[0];
+    if (!big) { toast('Disegna almeno una stanza per poterci camminare dentro.'); return; }
+    const p = big.meta.anchor || G.pole(big.pts);
+    start = { x: p[0], z: p[1] };
+  }
+  const yaw = Math.atan2(-(from.target.x - from.pos.x), -(from.target.z - from.pos.z));
+  if (tool !== 'select') setTool('select');
+  select(null);
+  walking = true;
+  controls.enabled = false;
+  camera = walkCam;
+  document.body.classList.add('walking');
+  document.querySelectorAll('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.view === 'walk'));
+  sun.castShadow = true;
+  ceilingsG.visible = true;
+  indoorLight.visible = true;
+  rebuildWalls();
+  rebuildItems();
+  updateOverlay();
+  walker.start(start.x, start.z, yaw);
+}
+
+function exitWalk() {
+  walker.stop();
+  walking = false;
+  document.body.classList.remove('walking');
+  ceilingsG.visible = false;
+  indoorLight.visible = false;
+  rebuildWalls();
+  rebuildItems();
+  updateOverlay();
+}
+
 function rebuildGeometry() {
   Plan.syncOpenings(state);
   refreshRooms();
@@ -510,6 +623,7 @@ function rebuildGeometry() {
   for (const [id, o] of itemObjs) if (!alive.has(id)) { itemsG.remove(o); itemObjs.delete(id); }
   for (const it of state.items) if (isOpening(it)) refreshItemQuiet(it);
   updateOverlay();
+  walker.refresh();
 }
 function refreshItemQuiet(it) {
   const old = itemObjs.get(it.id);
@@ -864,7 +978,7 @@ let drag = null;
 let down = null;
 
 canvas.addEventListener('pointerdown', e => {
-  if (e.button !== 0) return;
+  if (e.button !== 0 || walking) return;
   if (cornerPreview) select(null); // an unconfirmed corner preview is dropped first
   down = { x: e.clientX, y: e.clientY };
   setRay(e);
@@ -897,6 +1011,7 @@ canvas.addEventListener('pointerdown', e => {
 }, { capture: true });
 
 canvas.addEventListener('pointermove', e => {
+  if (walking) return;
   setRay(e);
   const p = floorPoint();
   if (tool !== 'select') { if (p) drawMove(p, e); return; }
@@ -926,6 +1041,7 @@ function hover(e) {
 }
 
 function endPointer(e) {
+  if (walking) return;
   if (tool !== 'select') { drawUp(e); controls.enabled = true; down = null; return; }
   if (drag) {
     const { moved, kind, id } = drag;
@@ -1765,6 +1881,7 @@ $('#wallMode').addEventListener('change', e => {
 $('#undoBtn').addEventListener('click', undo);
 $('#redoBtn').addEventListener('click', redo);
 $('#fitBtn').addEventListener('click', fitView);
+$('#walkExit').addEventListener('click', () => setView('3d'));
 $('#newBtn').addEventListener('click', () => wizard.open());
 $('#projectName').addEventListener('change', e => { state.name = e.target.value.trim() || 'Il mio appartamento'; commit(); });
 $('#coach').addEventListener('click', e => {
@@ -1806,7 +1923,7 @@ function closeSidebarOnMobile() { if (matchMedia('(max-width: 820px)').matches) 
 $('#menuBtn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
 
 window.addEventListener('keydown', e => {
-  if (e.target.closest?.('input, select, textarea, dialog')) return;
+  if (walking || e.target.closest?.('input, select, textarea, dialog')) return;
   const k = e.key.toLowerCase();
   const mod = e.ctrlKey || e.metaKey;
   if (tool !== 'select') {
@@ -1870,8 +1987,11 @@ makeThumbs();
 if (savedBroken) toast('Il progetto salvato non si apre: ne ho conservato una copia nel browser, non è stato cancellato.');
 else if (!saved) wizard.open();
 
+const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
-  controls.update();
+  const dt = clock.getDelta();
+  if (walking) walker.update(dt);
+  else controls.update();
   updateWallFade();
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
@@ -1879,6 +1999,6 @@ renderer.setAnimationLoop(() => {
 
 // Handy for debugging from the browser console.
 window.planner = {
-  get state() { return state; }, get rooms() { return rooms; }, get camera() { return camera; }, get controls() { return controls; }, scene,
+  get state() { return state; }, get rooms() { return rooms; }, get camera() { return camera; }, get controls() { return controls; }, scene, walker,
   select, addItem, setView, setTab, setTool, undo, wizard, startProject, findConflicts,
 };

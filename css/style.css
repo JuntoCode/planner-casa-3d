@@ -194,6 +194,30 @@ body.rooms-mode .furniture-only { display: none; }
 .primary-soft { background: var(--accent-soft); color: var(--accent); border-color: #cddcf8; font-weight: 600; }
 .primary-soft:hover:not(:disabled) { background: #dce8fc !important; border-color: #b7cdf4 !important; }
 
+/* first-person walk */
+.walk-ui { display: none; }
+body.walking .walk-ui { display: block; }
+body.walking .labels, body.walking .tools, body.walking .help, body.walking #props,
+body.walking #status, body.walking #coach, body.walking .draw-hint { display: none !important; }
+body.walking #scene { cursor: grab; }
+body.walk-locked #scene { cursor: none; }
+.crosshair {
+  position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; z-index: 3;
+  border-radius: 50%; background: rgba(255,255,255,.9); box-shadow: 0 0 0 1.5px rgba(0,0,0,.35); pointer-events: none;
+}
+.walk-hint {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3;
+  display: flex; align-items: center; gap: 12px; max-width: calc(100% - 24px);
+  background: rgba(29, 36, 48, .88); color: #fff; border-radius: 12px; padding: 8px 8px 8px 14px; font-size: 12.5px;
+}
+.walk-hint kbd { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.3); color: #fff; margin: 0 1px; }
+.walk-hint button { background: #fff; border-color: #fff; color: var(--text); font-weight: 600; }
+.walk-hint .touch { display: none; }
+@media (pointer: coarse) {
+  .walk-hint .desk { display: none; }
+  .walk-hint .touch { display: inline; }
+}
+
 /* drawing tools */
 .tools {
   position: absolute; top: 12px; left: 12px; z-index: 3; display: flex; flex-direction: column; gap: 2px;

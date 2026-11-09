@@ -32,6 +32,7 @@
     <div class="seg" id="viewSeg">
       <button data-view="3d" class="on">3D</button>
       <button data-view="2d">Pianta</button>
+      <button data-view="walk" title="Cammina in prima persona dentro la casa">Cammina</button>
     </div>
     <select id="wallMode" title="Visualizzazione muri">
       <option value="auto">Muri: auto</option>
@@ -71,6 +72,14 @@
         <button data-tool="railing" title="Ringhiera di terrazzo o balcone"><i>⫼</i><span>Ringhiera</span></button>
       </div>
       <div id="drawHint" class="draw-hint" hidden></div>
+      <div class="walk-ui">
+        <div class="crosshair"></div>
+        <div class="walk-hint">
+          <span class="desk"><b>Clicca</b> e muovi il mouse per guardarti intorno · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> o frecce per camminare · <kbd>Shift</kbd> corri · <kbd>Esc</kbd> esci</span>
+          <span class="touch">Trascina a <b>sinistra</b> per camminare, a <b>destra</b> per guardarti intorno</span>
+          <button id="walkExit">Esci</button>
+        </div>
+      </div>
       <div id="status" class="status" hidden></div>
       <div id="coach" class="coach" hidden>
         <div><b>Ecco la tua piantina.</b> Trascina i muri per sistemare le misure, clicca una stanza per nome, pavimento e forma.</div>

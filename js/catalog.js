@@ -270,19 +270,26 @@ const B = {
     for (const s of [-1, 1]) box(g, f, h, d + 0.03, WHITE, s * (w / 2 - f / 2), 0, 0);
     box(g, w, f, d + 0.03, WHITE, 0, h - f, 0);
     const lw = w - 2 * f;
-    box(g, lw, h - f - 0.01, 0.04, c, 0, 0.01, 0);
-    box(g, 0.12, 0.02, 0.06, '#9a9a9a', lw / 2 - 0.1, 1.0, 0, METAL);
+    // The leaf turns on its hinge (left side): closed in the plan, open when walking.
+    const leaf = new THREE.Group();
+    leaf.position.set(-lw / 2, 0, 0);
+    leaf.userData.leaf = true;
+    g.add(leaf);
+    box(leaf, lw, h - f - 0.01, 0.04, c, lw / 2, 0.01, 0);
+    box(leaf, 0.12, 0.02, 0.06, '#9a9a9a', lw - 0.1, 1.0, 0, METAL);
     g.children.forEach(m => { m.userData.tall = true; });
-    // Swing arc on the floor (stays visible with low walls). Hinge on the left.
+    // Swing arc on the floor (stays visible with low walls).
     const arc = new THREE.Mesh(
       new THREE.RingGeometry(lw - 0.012, lw, 32, 1, 0, Math.PI / 2),
       mat('#7a8794', { side: THREE.DoubleSide }),
     );
     arc.rotation.x = Math.PI / 2;
     arc.position.set(-lw / 2, 0.004, d / 2);
+    arc.userData.swing = true;
     g.add(arc);
     const line = box(g, 0.012, 0.002, lw, '#7a8794', -lw / 2 + 0.006, 0.003, d / 2 + lw / 2);
     line.castShadow = false;
+    line.userData.swing = true;
   },
   arch(g, w, d, h, c) {
     const f = 0.05;
