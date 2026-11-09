@@ -376,6 +376,14 @@ label.wz-row { cursor: pointer; }
 @media (max-width: 1100px) {
   .project-name { display: none; }
 }
+#bootError {
+  position: fixed; left: 12px; right: 12px; top: 12px; z-index: 100; display: flex; flex-direction: column; gap: 8px;
+  background: #fff4f4; color: #a32a2f; border: 1px solid #f3c6c8; border-radius: 12px; padding: 12px 14px;
+  font: 14px system-ui, sans-serif; box-shadow: var(--shadow);
+}
+#bootError span { font-size: 12px; color: #6b3a3c; word-break: break-word; }
+#bootError button { align-self: flex-start; min-height: 44px; padding: 8px 18px; font-weight: 600; }
+
 /* ---------- phones and small tablets: bottom bar + bottom sheets ---------- */
 .top-more { display: contents; }
 .bottom-nav, .sheet-handle, .quick-row, .draw-done { display: none; }

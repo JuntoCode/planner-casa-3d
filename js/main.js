@@ -1774,6 +1774,8 @@ const touchIds = new Set();
 const isSelected = hit => !!selection && selection.kind === hit.kind && selection.id === hit.id;
 let lastTap = null;
 let walkHintTimer = 0;
+// A finger lifted anywhere (even off the canvas) no longer counts as "on the screen".
+for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, e => touchIds.delete(e.pointerId), true);
 
 canvas.addEventListener('pointerdown', e => {
   if (e.button !== 0 || walking) return;
@@ -3123,6 +3125,7 @@ for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'keydown',
 }
 new ResizeObserver(() => wake()).observe(viewport);
 document.addEventListener('visibilitychange', () => wake());
+wake(4000); // draw from the first frame: the house appears at once, not after the heartbeat
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta(), now = performance.now();
@@ -3145,3 +3148,4 @@ window.planner = {
   select, addItem, setView, setTab, setTool, undo, wizard, startProject, findConflicts, walkColliders,
   switchFloor, addFloor, deleteFloor, floorRooms,
 };
+document.getElementById('bootError')?.remove(); // it started after all
