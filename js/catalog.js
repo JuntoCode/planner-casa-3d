@@ -216,6 +216,16 @@ const B = {
     box(g, w, 0.04, w * 1.25, c, 0, 0.4, 0.08, { roughness: 0.2 });
     box(g, w * 0.95, Math.max(0.2, h - 0.4), 0.18, c, 0, 0.4, -d / 2 + 0.09, { roughness: 0.2 });
   },
+  bidet(g, w, d, h, c) {
+    const back = -d / 2 + 0.05;
+    box(g, w * 0.7, h, 0.1, c, 0, 0, back, { roughness: 0.2 });
+    const bowl = cyl(g, w / 2, w / 2.4, h, c, 0, 0, 0.04, { roughness: 0.2 });
+    bowl.scale.z = (d - 0.08) / w;
+    const basin = cyl(g, w / 2 - 0.04, w / 2 - 0.04, 0.004, '#dfe7ea', 0, h, 0.05, { roughness: 0.1 });
+    basin.scale.z = (d - 0.16) / (w - 0.08);
+    cyl(g, 0.014, 0.014, 0.12, '#c0c4c6', 0, h, back + 0.03, METAL);
+    box(g, 0.022, 0.022, 0.09, '#c0c4c6', 0, h + 0.1, back + 0.075, METAL);
+  },
   washbasin(g, w, d, h, c) {
     box(g, w - 0.04, h - 0.32, d - 0.04, c, 0, 0.18, -0.02);
     drawers(g, w - 0.04, h - 0.32, d - 0.04, 1, 0.18);
@@ -344,6 +354,7 @@ export const CATALOG = [
   ] },
   { cat: 'Bagno', items: [
     { type: 'toilet', name: 'WC', build: 'toilet', w: 38, d: 60, h: 80, color: '#ffffff' },
+    { type: 'bidet', name: 'Bidet', build: 'bidet', w: 38, d: 55, h: 40, color: '#ffffff' },
     { type: 'washbasin', name: 'Lavabo con mobile', build: 'washbasin', w: 60, d: 46, h: 85, color: '#8a7560' },
     { type: 'shower', name: 'Doccia', build: 'shower', w: 90, d: 90, h: 200, color: '#dfefff' },
     { type: 'bathtub', name: 'Vasca', build: 'bathtub', w: 170, d: 75, h: 55, color: '#ffffff' },

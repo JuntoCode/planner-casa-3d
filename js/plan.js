@@ -442,7 +442,7 @@ function guessType(st, r, { byId, faceCount, largest }) {
   const walls = r.walls.map(id => byId.get(id)).filter(Boolean);
   const m2 = r.area / 10000;
   if (walls.some(w => w.type === 'railing')) return m2 < 6 ? 'balcony' : 'terrace';
-  if (has('toilet', 'shower', 'bathtub', 'washbasin')) return 'bath';
+  if (has('toilet', 'bidet', 'shower', 'bathtub', 'washbasin')) return 'bath';
   if (has(...KITCHEN)) return has(...SOFA) ? 'living' : 'kitchen';
   if (has('bed2')) return 'bedroom';
   if (has('bed1')) return 'kidsroom';

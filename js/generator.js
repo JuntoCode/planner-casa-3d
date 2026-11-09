@@ -193,9 +193,12 @@ export function generateHome(opts) {
       if (w >= 290 && ww >= 100) P('wardrobe', w - 35, d - 5 - ww / 2, 270, { w: ww });
     } else if (r.kind === 'bath') {
       P('shower', 50, 50, 0);
+      // Along the outer wall: WC, bidet (when it fits), washbasin, and the washer if there is room.
       P('toilet', 30, d - 35, 180);
-      P('washbasin', 89, d - 28, 180);
-      if (r.main && w >= 220) P('washer', w - 35, d - 35, 180);
+      const bidet = w >= 185;
+      if (bidet) P('bidet', 83, d - 32.5, 180);
+      P('washbasin', bidet ? 142 : 89, d - 28, 180);
+      if (r.main && w >= (bidet ? 245 : 220)) P('washer', w - 35, d - 35, 180);
     } else if (r.kind === 'studio') {
       P('desk', w / 2, d - 40, 180);
       P('officeChair', w / 2, d - 110, 0);
