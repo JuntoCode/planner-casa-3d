@@ -259,6 +259,88 @@ const PAINT = {
       g.fillRect(i * kw + kw * 0.65, 0, kw * 0.7, 310);
     }
   },
+  // ---- lamp shades: used as colour and glow, so bright parts shine ----
+  // Pierced brass with coloured glass stars (Moroccan lantern).
+  moroccan(g, r) {
+    g.fillStyle = '#2e2216';
+    g.fillRect(0, 0, 512, 512);
+    const cols = ['#ffb347', '#e0475b', '#3fb8a9', '#ffd56b', '#8c6bb1'];
+    const star = (x, y, rad, col) => {
+      g.fillStyle = col;
+      g.beginPath();
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2, rr = k % 2 ? rad * 0.5 : rad;
+        g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+      }
+      g.fill();
+    };
+    for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) {
+      const x = i * 64 + (j % 2 ? 32 : 0) + 32, y = j * 64 + 32;
+      star(x, y, 20, pick(r, cols));
+      g.fillStyle = '#ffe2a8';
+      for (let k = 0; k < 4; k++) { g.beginPath(); g.arc(x + Math.cos(k * Math.PI / 2 + 0.78) * 30, y + Math.sin(k * Math.PI / 2 + 0.78) * 30, 3, 0, Math.PI * 2); g.fill(); }
+    }
+  },
+  // Carved gourd: brown skin with rows of glowing dots and diamonds.
+  gourd(g, r) {
+    g.fillStyle = '#5c3a1e';
+    g.fillRect(0, 0, 512, 512);
+    g.fillStyle = '#ffd58a';
+    for (let j = 0; j < 14; j++) for (let i = 0; i < 24; i++) {
+      const x = i * (512 / 24) + (j % 2 ? 10 : 0), y = 20 + j * 34;
+      const k = (i + j) % 6;
+      g.beginPath();
+      if (k === 0) { g.moveTo(x, y - 9); g.lineTo(x + 7, y); g.lineTo(x, y + 9); g.lineTo(x - 7, y); }
+      else g.arc(x, y, k % 2 ? 2.5 : 4, 0, Math.PI * 2);
+      g.fill();
+    }
+    r();
+  },
+  // Stained glass: jittered cells of coloured glass with dark leading.
+  tiffany(g, r) {
+    g.fillStyle = '#1d1a16';
+    g.fillRect(0, 0, 512, 512);
+    const pal = pick(r, [['#e8a33c', '#c96a2b', '#5f8f4a', '#e9d27a'], ['#3f6fb0', '#7fc7c0', '#e9d27a', '#9b5c7a'], ['#c0392b', '#e8a33c', '#2f6b4f', '#f2e3b3']]);
+    const n = 10, s = 512 / n, pts = [];
+    for (let j = 0; j <= n; j++) { pts[j] = []; for (let i = 0; i <= n; i++) pts[j][i] = [i * s + (i % n ? (r() - 0.5) * s * 0.5 : 0), j * s + (j % n ? (r() - 0.5) * s * 0.5 : 0)]; }
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      g.fillStyle = j < 2 ? pal[3] : pick(r, pal);
+      g.beginPath();
+      for (const [a, b] of [[j, i], [j, i + 1], [j + 1, i + 1], [j + 1, i]]) g.lineTo(pts[a][b][0], pts[a][b][1]);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = '#1d1a16';
+      g.lineWidth = 4;
+      g.stroke();
+    }
+  },
+  // Rattan weave: tan strips, light shining through the gaps.
+  weave(g) {
+    g.fillStyle = '#ffd98f';
+    g.fillRect(0, 0, 512, 512);
+    const s = 32;
+    for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) {
+      g.fillStyle = (i + j) % 2 ? '#a77a4a' : '#8a6038';
+      if ((i + j) % 2) g.fillRect(i * s + 2, j * s + 8, s - 4, s - 16);
+      else g.fillRect(i * s + 8, j * s + 2, s - 16, s - 4);
+    }
+  },
+  // Dark carved wood with glowing zigzags and triangles.
+  tribal(g, r) {
+    g.fillStyle = '#3a2416';
+    g.fillRect(0, 0, 512, 512);
+    g.fillStyle = '#ffb35c';
+    for (let band = 0; band < 6; band++) {
+      const y = 30 + band * 82, kind = band % 3;
+      g.beginPath();
+      if (kind === 0) { for (let x = 0; x <= 512; x += 32) g.lineTo(x, y + (x / 32 % 2 ? 0 : 22)); for (let x = 512; x >= 0; x -= 32) g.lineTo(x, y + 8 + (x / 32 % 2 ? 0 : 22)); }
+      else if (kind === 1) for (let x = 8; x < 512; x += 42) { g.moveTo(x, y + 30); g.lineTo(x + 16, y); g.lineTo(x + 32, y + 30); }
+      else for (let x = 16; x < 512; x += 32) { g.moveTo(x + 6, y + 15); g.arc(x, y + 15, 6, 0, Math.PI * 2); }
+      g.fill();
+    }
+    r();
+  },
+
   // A computer desktop: wallpaper and a couple of windows.
   screen(g, r) {
     const grd = g.createLinearGradient(0, 0, 512, 512);

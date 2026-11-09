@@ -18,6 +18,18 @@ export function decorBuilders({ box, cyl, mat, shade, mulberry, def, DARK, WHITE
     }
     return texMats.get(key);
   }
+  // A lamp shade drawn on a canvas that also glows where the picture is bright.
+  function glowTexMat(tex, k = 1, opts = {}) {
+    const key = 'glow' + tex.uuid + k + JSON.stringify(opts);
+    if (!texMats.has(key)) {
+      const m = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: '#ffffff', emissiveIntensity: k, roughness: 0.6, side: THREE.DoubleSide, ...opts });
+      m.userData.shared = true;
+      texMats.set(key, m);
+    }
+    return texMats.get(key);
+  }
+  // Points of a lathe outline from a radius profile r(t), t = 0 (bottom) .. 1 (top).
+  const profile = (n, height, r) => Array.from({ length: n + 1 }, (_, k) => new THREE.Vector2(Math.max(0.001, r(k / n)), (k / n) * height));
   const glow = (color, k = 1.6) => mat(color, { emissive: color, emissiveIntensity: k, roughness: 0.4 });
   const seedOf = it => it.seed ?? [...String(it.id || it.type)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) | 0, 7);
   const add = (g, geo, m, x = 0, y = 0, z = 0) => {
@@ -297,6 +309,142 @@ export function decorBuilders({ box, cyl, mat, shade, mulberry, def, DARK, WHITE
       add(g, geo, mat('#f3ead6', { side: THREE.DoubleSide, roughness: 1, emissive: '#fff1d0', emissiveIntensity: 0.45 }), 0, h * 0.58 + h * 0.21, 0);
     },
 
+    // ---------- mystic and tribal table lamps ----------
+    // Moroccan lantern: an onion-shaped pierced brass body full of coloured stars.
+    moroccanLamp(g, w, d, h, c, it) {
+      cyl(g, w * 0.28, w * 0.34, 0.03, c, 0, 0, 0, METAL);
+      cyl(g, w * 0.08, w * 0.12, h * 0.12, c, 0, 0.03, 0, METAL);
+      const bh = h * 0.72, y0 = h * 0.15;
+      const pts = profile(20, bh, t => (w / 2) * (t < 0.6 ? 0.45 + 0.55 * Math.sin((t / 0.6) * Math.PI * 0.5 + 0.3) : Math.max(0.05, 1 - (t - 0.6) / 0.4) ** 1.4));
+      const body = add(g, new THREE.LatheGeometry(pts, 36), glowTexMat(artTexture('moroccan', seedOf(it)), 1.2, METAL), 0, y0, 0);
+      body.castShadow = false;
+      cyl(g, 0.004, 0.012, h - y0 - bh + 0.01, c, 0, y0 + bh - 0.01, 0, METAL, 8);
+      ball(g, 0.04, '#ffcf8a', 0, y0 + bh * 0.4, 0, { emissive: '#ffb347', emissiveIntensity: 2 });
+    },
+    // Himalayan salt lamp: a rough glowing rock on a wooden block.
+    saltLamp(g, w, d, h, c, it) {
+      box(g, w * 0.85, 0.04, d * 0.85, 'wood:walnut', 0, 0, 0);
+      const geo = new THREE.IcosahedronGeometry(0.5, 2);
+      const pos = geo.attributes.position, s = seedOf(it) % 97;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        const n = 1 + 0.16 * Math.sin(x * 9 + s) * Math.cos(y * 7 - s) + 0.1 * Math.sin(z * 11 + y * 5);
+        pos.setXYZ(i, x * n, y * n, z * n);
+      }
+      geo.computeVertexNormals();
+      const rock = add(g, geo, mat(c, { flatShading: true, roughness: 0.55, emissive: '#ff8a4c', emissiveIntensity: 0.75 }), 0, 0.04 + (h - 0.04) / 2, 0);
+      rock.scale.set(w * 0.8, h - 0.04, d * 0.8);
+    },
+    // Lava lamp: tapered glass full of slow glowing blobs.
+    lavaLamp(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      add(g, new THREE.LatheGeometry(profile(8, h * 0.3, t => (w / 2) * (1 - 0.45 * t)), 28), mat('#c0c4c6', { side: THREE.DoubleSide, ...METAL }));
+      const gh = h * 0.55;
+      add(g, new THREE.LatheGeometry(profile(12, gh, t => (w / 2) * (0.55 + 0.35 * Math.sin(Math.PI * (0.15 + 0.6 * t)) - 0.25 * t)), 28), mat('#ffb3d0', { transparent: true, opacity: 0.35, roughness: 0.05, depthWrite: false, side: THREE.DoubleSide }), 0, h * 0.3, 0).castShadow = false;
+      for (let k = 0; k < 5; k++) {
+        const b = ball(g, w * (0.07 + r() * 0.07), c, (r() - 0.5) * w * 0.15, h * 0.33 + r() * gh * 0.85, (r() - 0.5) * w * 0.15, { emissive: c, emissiveIntensity: 1.2, roughness: 0.3 });
+        b.scale.y = 1.3 + r() * 0.6;
+      }
+      add(g, new THREE.LatheGeometry(profile(6, h * 0.15, t => (w / 2) * (0.5 - 0.25 * t)), 28), mat('#c0c4c6', { side: THREE.DoubleSide, ...METAL }), 0, h * 0.85, 0);
+    },
+    // Amethyst geode: a dark stone shell lined with glowing crystals.
+    geodeLamp(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      cyl(g, w * 0.3, w * 0.35, 0.03, '#2b2b2b', 0, 0, 0);
+      const shell = add(g, new THREE.SphereGeometry(0.5, 18, 12, Math.PI * 0.15, Math.PI * 1.7), mat('#6e665c', { flatShading: true, side: THREE.DoubleSide, roughness: 1 }), 0, 0.03 + (h - 0.03) / 2, 0);
+      shell.scale.set(w, h - 0.03, d * 0.7);
+      shell.rotation.y = Math.PI / 2;
+      const cy = 0.03 + (h - 0.03) / 2;
+      // Crystals grow from the inside of the rim towards the middle and the viewer.
+      const up = new THREE.Vector3(0, 1, 0);
+      for (let k = 0; k < 30; k++) {
+        const a = r() * Math.PI * 2, rr = 0.3 + r() * 0.12;
+        const x = Math.cos(a) * w * rr, y = cy + Math.sin(a) * (h - 0.03) * rr, z = -d * 0.15 + r() * d * 0.1;
+        const cr = add(g, new THREE.ConeGeometry(0.01 + r() * 0.01, 0.04 + r() * 0.04, 6), mat(c, { flatShading: true, emissive: c, emissiveIntensity: 0.9, roughness: 0.2 }), x, y, z);
+        cr.quaternion.setFromUnitVectors(up, new THREE.Vector3(-Math.cos(a), -Math.sin(a), 0.7).normalize());
+      }
+      ball(g, w * 0.12, '#f0d6ff', 0, cy, -d * 0.1, { emissive: c, emissiveIntensity: 1.5 });
+    },
+    // Carved gourd: dotted light pours out of a dried gourd.
+    gourdLamp(g, w, d, h, c, it) {
+      cyl(g, w * 0.25, w * 0.3, 0.03, 'wood:walnut', 0, 0, 0);
+      const pts = profile(24, h - 0.03, t => (w / 2) * (t < 0.62 ? Math.sin(Math.PI * (0.1 + (t / 0.62) * 0.9)) * 0.98 + 0.02 : 0.32 * Math.sin(Math.PI * ((t - 0.62) / 0.38) * 0.9 + 0.3) + 0.06));
+      const body = add(g, new THREE.LatheGeometry(pts, 36), glowTexMat(artTexture('gourd', seedOf(it)), 1.1, { roughness: 0.8, color: c }), 0, 0.03, 0);
+      body.castShadow = false;
+      ball(g, w * 0.15, '#ffcf8a', 0, h * 0.3, 0, { emissive: '#ffb347', emissiveIntensity: 2 });
+    },
+    // Woven rattan globe on a tribal wooden stand.
+    rattanLamp(g, w, d, h, c, it) {
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2;
+        tube(g, [[Math.cos(a) * w * 0.32, 0, Math.sin(a) * w * 0.32], [Math.cos(a) * w * 0.1, h * 0.35, Math.sin(a) * w * 0.1]], 0.012, c);
+      }
+      const r = Math.min(w, h * 0.75) / 2;
+      const shade = add(g, new THREE.SphereGeometry(r, 32, 18), glowTexMat(artTexture('weave', seedOf(it)), 0.9, { roughness: 1 }), 0, h - r, 0);
+      shade.castShadow = false;
+    },
+    // Drum shade printed with a mandala, on a carved wooden base.
+    mandalaLamp(g, w, d, h, c, it) {
+      const bh = h * 0.45;
+      add(g, new THREE.LatheGeometry(profile(14, bh, t => w * (0.14 + 0.08 * Math.sin(t * Math.PI * 4)) * (1 - 0.3 * t)), 24), mat(c, { roughness: 0.6 }));
+      const shade = add(g, new THREE.CylinderGeometry(w / 2, w / 2, h * 0.5, 40, 1, true), glowTexMat(artTexture('mandala', seedOf(it)), 0.8, { roughness: 1 }), 0, bh + h * 0.27, 0);
+      shade.castShadow = false;
+    },
+    // Tiffany lamp: bronze base and a dome of coloured glass.
+    tiffanyLamp(g, w, d, h, c, it) {
+      cyl(g, w * 0.22, w * 0.26, 0.04, c, 0, 0, 0, METAL);
+      add(g, new THREE.LatheGeometry(profile(10, h * 0.62, t => w * (0.05 + 0.06 * (1 - t) ** 3)), 20), mat(c, METAL), 0, 0.04, 0);
+      const dome = add(g, new THREE.SphereGeometry(w / 2, 36, 14, 0, Math.PI * 2, 0, Math.PI * 0.42), glowTexMat(artTexture('tiffany', seedOf(it)), 1, { roughness: 0.25 }), 0, h * 0.58, 0);
+      dome.scale.y = (h * 0.42) / (w / 2);
+      dome.castShadow = false;
+      ball(g, 0.015, c, 0, h - 0.005, 0, METAL);
+    },
+    // Crystal ball held by three wooden claws, a swirl of light inside.
+    crystalBall(g, w, d, h, c, it) {
+      const r = Math.min(w, h) * 0.38;
+      cyl(g, w * 0.36, w * 0.42, h * 0.16, c, 0, 0, 0, { roughness: 0.6 });
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2;
+        tube(g, [[Math.cos(a) * w * 0.3, h * 0.15, Math.sin(a) * w * 0.3], [Math.cos(a) * r * 0.95, h * 0.16 + r * 0.6, Math.sin(a) * r * 0.95], [Math.cos(a) * r * 0.7, h * 0.16 + r * 1.2, Math.sin(a) * r * 0.7]], 0.008, c);
+      }
+      const cy = h * 0.16 + r;
+      add(g, new THREE.SphereGeometry(r, 28, 18), mat('#e6f0ff', { transparent: true, opacity: 0.28, roughness: 0.02, depthWrite: false })).position.set(0, cy, 0);
+      const swirl = mulberry(seedOf(it));
+      for (let k = 0; k < 7; k++) {
+        const a = k * 0.9;
+        ball(g, r * (0.18 + swirl() * 0.12), k % 2 ? '#b38cff' : '#7fd4ff', Math.cos(a) * r * 0.35, cy + (k - 3) * r * 0.1, Math.sin(a) * r * 0.35, { emissive: k % 2 ? '#9b6bff' : '#5fc8ff', emissiveIntensity: 1.4, transparent: true, opacity: 0.8 });
+      }
+    },
+    // Tribal totem: a carved wooden column with glowing cut-outs.
+    totemLamp(g, w, d, h, c, it) {
+      box(g, w, 0.03, d, '#2b2b2b', 0, 0, 0);
+      const col = add(g, new THREE.BoxGeometry(w * 0.7, h - 0.06, d * 0.7), glowTexMat(artTexture('tribal', seedOf(it)), 1, { roughness: 0.8, color: c }), 0, 0.03 + (h - 0.06) / 2, 0);
+      col.castShadow = true;
+      box(g, w * 0.85, 0.03, d * 0.85, '#2b2b2b', 0, h - 0.03, 0);
+    },
+    // Dreamcatcher for the wall: a hoop with a web, beads and feathers hanging.
+    dreamcatcher(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      const R = w / 2 - 0.01, cy = h - R - 0.03, z = -d / 2 + 0.02;
+      add(g, new THREE.TorusGeometry(R, 0.008, 8, 40), mat(c, { roughness: 1 }), 0, cy, z);
+      const n = 8, web = [];
+      for (let ring = 0; ring < 3; ring++) {
+        const rr = R * (0.85 - ring * 0.25), pts = [];
+        for (let k = 0; k <= n; k++) { const a = ((k + ring * 0.5) / n) * Math.PI * 2; pts.push([Math.cos(a) * rr, cy + Math.sin(a) * rr, z]); }
+        web.push(pts);
+      }
+      for (const pts of web) for (let k = 0; k < n; k++) tube(g, [pts[k], pts[k + 1]], 0.0015, '#f2ead8');
+      for (let k = 0; k < n; k++) tube(g, [web[0][k], web[1][k], web[2][k]], 0.0015, '#f2ead8');
+      ball(g, 0.012, '#3fb8a9', 0, cy, z);
+      tube(g, [[0, cy + R, z], [0, h, z]], 0.002, c);
+      for (const x of [-R * 0.6, 0, R * 0.6]) {
+        const len = h * 0.25 + r() * h * 0.1, top = cy - R * (x ? 0.8 : 1);
+        tube(g, [[x, top, z], [x, top - len, z]], 0.0015, c);
+        ball(g, 0.01, ['#e0475b', '#ffd56b', '#3fb8a9'][Math.floor(r() * 3)], x, top - len * 0.4, z);
+        leaf(g, x, top - len - 0.11, z, 0.12, 0.035, 0, Math.PI, ['#f2ead8', '#c9a57a', '#8c6bb1'][Math.floor(r() * 3)]);
+      }
+    },
+
     // ---------- more floor lamps ----------
     // Uplighter: a bowl on a slim pole throwing light at the ceiling.
     torchiere(g, w, d, h, c) {
@@ -360,6 +508,206 @@ export function decorBuilders({ box, cyl, mat, shade, mulberry, def, DARK, WHITE
       cyl(g, w * 0.45, w * 0.5, 0.03, c, 0, 0, 0, METAL);
       cyl(g, w * 0.22, w * 0.22, h - 0.06, '#fff8ea', 0, 0.03, 0, { emissive: '#ffefd0', emissiveIntensity: 1.3, roughness: 0.3 }, 20);
       cyl(g, w * 0.26, w * 0.26, 0.03, c, 0, h - 0.03, 0, METAL);
+    },
+
+    // ---------- bathroom ----------
+    towelRail(g, w, d, h, c) {
+      const z = -d / 2;
+      for (const s of [-1, 1]) box(g, 0.02, 0.04, d * 0.8, '#c0c4c6', s * (w / 2 - 0.01), h - 0.06, z + d * 0.4, METAL);
+      const bar = cyl(g, 0.01, 0.01, w, '#c0c4c6', 0, 0, 0, METAL, 10);
+      bar.rotation.z = Math.PI / 2;
+      bar.position.set(0, h - 0.04, z + d * 0.7);
+      box(g, w * 0.7, h * 0.9, 0.025, c, 0, h * 0.06, z + d * 0.62, { roughness: 1 });
+      box(g, w * 0.7, h * 0.5, 0.025, shade(c, -0.06), 0, h * 0.46, z + d * 0.78, { roughness: 1 });
+    },
+    towelRadiator(g, w, d, h, c) {
+      const z = -d / 2 + d * 0.5;
+      for (const s of [-1, 1]) cyl(g, 0.014, 0.014, h, c, s * (w / 2 - 0.015), 0, z, { roughness: 0.3 }, 10);
+      for (let y = 0.05; y < h - 0.02; y += 0.07) { const t = cyl(g, 0.009, 0.009, w - 0.03, c, 0, 0, 0, { roughness: 0.3 }, 8); t.rotation.z = Math.PI / 2; t.position.set(0, y, z); }
+      box(g, w * 0.75, h * 0.35, 0.03, '#9fb8c8', 0, h * 0.5, z + 0.025, { roughness: 1 });
+    },
+    toiletPaper(g, w, d, h, c) {
+      box(g, 0.05, 0.05, 0.015, c, -w / 2 + 0.025, h - 0.06, -d / 2 + 0.0075, METAL);
+      const arm = cyl(g, 0.005, 0.005, w - 0.02, c, 0, 0, 0, METAL, 8);
+      arm.rotation.z = Math.PI / 2;
+      arm.position.set(0, h - 0.035, -d / 2 + d * 0.55);
+      const roll = cyl(g, 0.055, 0.055, w * 0.7, '#fbfaf7', 0, 0, 0, { roughness: 1 }, 20);
+      roll.rotation.z = Math.PI / 2;
+      roll.position.set(0.01, h - 0.035, -d / 2 + d * 0.55);
+    },
+    // Bathroom cabinet with mirror doors and a light on top.
+    mirrorCabinet(g, w, d, h, c) {
+      box(g, w, h, d, c, 0, 0, 0);
+      const n = w > 0.6 ? 2 : 1;
+      for (let k = 0; k < n; k++) box(g, w / n - 0.01, h - 0.02, 0.006, '#cfdde3', -w / 2 + (k + 0.5) * (w / n), 0.01, d / 2 + 0.003, { metalness: 0.35, roughness: 0.06 });
+      box(g, w * 0.8, 0.03, 0.04, '#fff8ea', 0, h + 0.01, d / 2 - 0.01, { emissive: '#fff1d0', emissiveIntensity: 1.4 });
+    },
+    laundryBasket(g, w, d, h, c, it) {
+      const m = texMat(artTexture('weave', seedOf(it)), { roughness: 1, side: THREE.DoubleSide }, c);
+      const b = add(g, new THREE.CylinderGeometry(w / 2, w * 0.42, h * 0.92, 28, 1, true), m, 0, h * 0.46, 0);
+      b.castShadow = true;
+      cyl(g, w * 0.42, w * 0.42, 0.01, shade(c, -0.2), 0, 0, 0);
+      cyl(g, w / 2 + 0.01, w / 2 + 0.01, h * 0.08, c, 0, h * 0.92, 0, { roughness: 1 }, 28);
+    },
+    // Soap dispenser, toothbrush cup and a little tray, for the washbasin.
+    bathSet(g, w, d, h, c) {
+      box(g, w, 0.01, d, '#e9e6df', 0, 0, 0, { roughness: 0.3 });
+      cyl(g, 0.03, 0.03, h * 0.6, c, -w * 0.25, 0.01, 0, { roughness: 0.2 }, 16);
+      cyl(g, 0.006, 0.006, h * 0.3, '#c0c4c6', -w * 0.25, 0.01 + h * 0.6, 0, METAL, 6);
+      box(g, 0.035, 0.008, 0.01, '#c0c4c6', -w * 0.25 + 0.015, h * 0.88, 0, METAL);
+      cyl(g, 0.03, 0.025, h * 0.5, c, w * 0.22, 0.01, 0, { roughness: 0.2 }, 16);
+      for (const [x, col] of [[-0.008, '#3fb8a9'], [0.01, '#e0475b']]) { const b = cyl(g, 0.004, 0.004, h * 0.6, col, w * 0.22 + x, 0.03, 0, {}, 6); b.rotation.z = x * 10; }
+    },
+    scale(g, w, d, h, c) {
+      box(g, w, h, d, c, 0, 0, 0, { roughness: 0.2 });
+      box(g, w * 0.4, 0.002, d * 0.15, '#1d1d1f', 0, h, -d * 0.3, { emissive: '#7fc7c0', emissiveIntensity: 0.4 });
+    },
+    // Ladder shelf leaning on the wall, with rolled towels.
+    ladderShelf(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      const lean = Math.atan2(d - 0.05, h);
+      for (const s of [-1, 1]) {
+        const rail = box(g, 0.03, h / Math.cos(lean), 0.03, c, 0, 0, 0);
+        rail.position.set(s * (w / 2 - 0.015), h / 2, 0);
+        rail.rotation.x = -lean;
+      }
+      const n = 4;
+      for (let k = 0; k < n; k++) {
+        const y = 0.25 + (k * (h - 0.4)) / (n - 1), z = d / 2 - 0.03 - (y / h) * (d - 0.05) - 0.06;
+        box(g, w - 0.04, 0.02, 0.18 - k * 0.025, c, 0, y, z + 0.03);
+        for (let t = 0; t < 2; t++) {
+          const roll = cyl(g, 0.045, 0.045, 0.14 - k * 0.02, ['#f2ead8', '#9fb8c8', '#e8b7a8', '#8a9a7b'][Math.floor(r() * 4)], 0, 0, 0, { roughness: 1 }, 14);
+          roll.rotation.x = Math.PI / 2;
+          roll.position.set(-w * 0.18 + t * w * 0.36, y + 0.065, z + 0.03);
+        }
+      }
+    },
+
+    // ---------- kitchen ----------
+    kettle(g, w, d, h, c) {
+      cyl(g, w * 0.42, w * 0.44, 0.02, '#2b2b2b', 0, 0, 0);
+      add(g, new THREE.LatheGeometry(profile(12, h * 0.8, t => (w / 2) * 0.8 * (1 - 0.35 * t)), 24), mat(c, { roughness: 0.25, side: THREE.DoubleSide }), 0, 0.02, 0);
+      cyl(g, w * 0.22, w * 0.22, 0.02, '#2b2b2b', 0, h * 0.82, 0);
+      tube(g, [[-w * 0.25, h * 0.75, 0], [-w * 0.45, h * 0.6, 0], [-w * 0.38, h * 0.25, 0]], 0.012, '#2b2b2b');
+      tube(g, [[w * 0.32, h * 0.35, 0], [w * 0.48, h * 0.55, 0]], 0.012, c);
+    },
+    toaster(g, w, d, h, c) {
+      box(g, w, h, d, c, 0, 0, 0, { roughness: 0.25, metalness: 0.3 });
+      for (const s of [-1, 1]) box(g, w * 0.7, 0.004, 0.025, '#1d1d1f', 0, h, s * d * 0.18);
+      box(g, 0.02, 0.03, 0.015, '#2b2b2b', w / 2, h * 0.7, 0);
+    },
+    knifeBlock(g, w, d, h, c) {
+      const b = box(g, w, h * 0.7, d, c, 0, 0, 0);
+      b.rotation.x = -0.25;
+      for (let k = 0; k < 5; k++) {
+        const hd = box(g, 0.018, 0.1, 0.022, '#1d1d1f', -w * 0.3 + (k % 3) * w * 0.3, h * 0.72, -d * 0.25 + Math.floor(k / 3) * 0.04);
+        hd.rotation.x = -0.25;
+      }
+    },
+    utensilHolder(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      cyl(g, w / 2, w * 0.45, h * 0.45, c, 0, 0, 0, { roughness: 0.3 }, 18);
+      for (let k = 0; k < 5; k++) {
+        const a = r() * Math.PI * 2, x = Math.cos(a) * w * 0.18, z = Math.sin(a) * w * 0.18;
+        tube(g, [[x * 0.5, h * 0.1, z * 0.5], [x, h * 0.95, z]], 0.006, ['wood:oak', '#2b2b2b', '#c0c4c6'][k % 3]);
+        box(g, 0.04, 0.05, 0.008, k % 2 ? 'wood:oak' : '#2b2b2b', x, h * 0.9, z);
+      }
+    },
+    dishRack(g, w, d, h, c) {
+      box(g, w, 0.015, d, '#c0c4c6', 0, 0, 0, METAL);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(g, 0.004, 0.004, h * 0.5, '#c0c4c6', sx * (w / 2 - 0.01), 0.015, sz * (d / 2 - 0.01), METAL, 6);
+      for (let k = 0; k < 6; k++) {
+        const p = cyl(g, 0.11, 0.11, 0.012, k % 2 ? '#f4f3ef' : '#9fb8c8', -w / 2 + 0.06 + k * 0.045, 0.13, -d * 0.1, { roughness: 0.3 }, 24);
+        p.rotation.z = Math.PI / 2 - 0.15;
+      }
+      for (const x of [w * 0.3, w * 0.38]) cyl(g, 0.035, 0.03, 0.09, '#f4f3ef', x, 0.015, d * 0.2, { roughness: 0.3 }, 14);
+    },
+    // A pot and a pan on the hob.
+    pots(g, w, d, h, c) {
+      cyl(g, 0.1, 0.1, h * 0.9, c, -w * 0.22, 0, -d * 0.18, METAL, 24);
+      cyl(g, 0.105, 0.105, 0.01, c, -w * 0.22, h * 0.9, -d * 0.18, METAL, 24);
+      ball(g, 0.012, '#2b2b2b', -w * 0.22, h * 0.95, -d * 0.18);
+      cyl(g, 0.12, 0.11, 0.05, '#2b2b2b', w * 0.18, 0, d * 0.15, { roughness: 0.4 }, 24);
+      const hd = box(g, 0.025, 0.02, 0.2, '#2b2b2b', w * 0.18, 0.03, d * 0.15 + 0.2);
+      hd.rotation.x = 0.1;
+    },
+    jars(g, w, d, h, c) {
+      [['#e9d27a', 0.75], ['#8a5a3c', 1], ['#f4efe4', 0.6]].forEach(([fill, k], i) => {
+        const x = -w / 2 + w / 6 + (i * w) / 3, jh = h * k;
+        cyl(g, w / 7, w / 7, jh, '#e6f0f2', x, 0, 0, { transparent: true, opacity: 0.35, roughness: 0.05, depthWrite: false }, 18);
+        cyl(g, w / 7 - 0.004, w / 7 - 0.004, jh * 0.7, fill, x, 0.003, 0, { roughness: 1 }, 18);
+        cyl(g, w / 7 + 0.003, w / 7 + 0.003, 0.025, 'wood:oak', x, jh, 0, {}, 18);
+      });
+    },
+    cuttingBoard(g, w, d, h, c) {
+      box(g, w, h, d, c, 0, 0, 0);
+      ball(g, 0.05, '#c98a4a', w * 0.15, h + 0.03, 0, { roughness: 1 }).scale.set(1.6, 0.7, 1);
+      ball(g, 0.035, '#d94a3a', -w * 0.22, h + 0.03, d * 0.1);
+    },
+    spiceRack(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      for (const y of [0, h * 0.52]) {
+        box(g, w, 0.015, d, c, 0, y, 0);
+        box(g, w, 0.035, 0.008, c, 0, y + 0.015, d / 2 - 0.004);
+        for (let x = -w / 2 + 0.04; x < w / 2 - 0.03; x += 0.055) {
+          cyl(g, 0.02, 0.02, 0.08, '#e6f0f2', x, y + 0.015, 0, { transparent: true, opacity: 0.5, depthWrite: false }, 12);
+          cyl(g, 0.018, 0.018, 0.05, ['#c0392b', '#e8a33c', '#56704f', '#8a5a3c', '#e9d27a'][Math.floor(r() * 5)], x, y + 0.017, 0, { roughness: 1 }, 12);
+          cyl(g, 0.021, 0.021, 0.015, '#2b2b2b', x, y + 0.095, 0, {}, 12);
+        }
+      }
+    },
+    // Wall rail with hanging ladles and spoons.
+    utensilRail(g, w, d, h, c) {
+      const z = -d / 2 + 0.04;
+      const bar = cyl(g, 0.007, 0.007, w, c, 0, 0, 0, METAL, 8);
+      bar.rotation.z = Math.PI / 2;
+      bar.position.set(0, h - 0.02, z);
+      for (const s of [-1, 1]) box(g, 0.015, 0.03, 0.05, c, s * (w / 2 - 0.02), h - 0.035, -d / 2 + 0.025, METAL);
+      const n = Math.max(3, Math.round(w / 0.12));
+      for (let k = 0; k < n; k++) {
+        const x = -w / 2 + 0.08 + (k * (w - 0.16)) / (n - 1), len = h * (0.6 + (k % 3) * 0.12);
+        tube(g, [[x, h - 0.02, z], [x, h - 0.02 - len, z]], 0.004, k % 2 ? '#2b2b2b' : '#c0c4c6', METAL);
+        if (k % 3 === 0) { const s = ball(g, 0.035, '#c0c4c6', x, h - len - 0.05, z + 0.01, METAL); s.scale.z = 0.4; }
+        else box(g, k % 3 === 1 ? 0.06 : 0.035, 0.07, 0.006, k % 2 ? '#2b2b2b' : '#c0c4c6', x, h - len - 0.09, z, METAL);
+      }
+    },
+    // Kitchen island: cabinets with a worktop that overhangs at the back for stools.
+    kitchenIsland(g, w, d, h, c) {
+      const over = Math.min(0.3, d * 0.3), body = d - over, zc = d / 2 - body / 2; // cabinets at the front
+      box(g, w, 0.1, body - 0.06, '#2b2b2b', 0, 0, zc - 0.03);
+      box(g, w, h - 0.14, body, c, 0, 0.1, zc);
+      fronts(g, w, h - 0.14, body, Math.max(2, Math.round(w / 0.6)), 0.1, zc);
+      box(g, w + 0.04, 0.04, d, '#e9e6df', 0, h - 0.04, 0, { roughness: 0.25 });
+    },
+    barStool(g, w, d, h, c) {
+      const seat = cyl(g, w / 2, w / 2 - 0.02, 0.05, c, 0, h - 0.05, 0, { roughness: 0.8 }, 24);
+      seat.castShadow = true;
+      for (let k = 0; k < 4; k++) {
+        const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+        tube(g, [[Math.cos(a) * w * 0.45, 0, Math.sin(a) * w * 0.45], [Math.cos(a) * w * 0.3, h - 0.05, Math.sin(a) * w * 0.3]], 0.01, '#2b2b2b', METAL);
+      }
+      const ring = add(g, new THREE.TorusGeometry(w * 0.38, 0.007, 6, 24), mat('#2b2b2b', METAL), 0, h * 0.32, 0);
+      ring.rotation.x = Math.PI / 2;
+    },
+    dishwasher(g, w, d, h, c) {
+      box(g, w, 0.1, d - 0.06, DARK, 0, 0, -0.03);
+      box(g, w, h - 0.14, d - 0.03, c, 0, 0.1, -0.015, { roughness: 0.3, metalness: 0.3 });
+      box(g, w - 0.02, 0.08, 0.005, '#3b3f45', 0, h - 0.24, d / 2 - 0.012);
+      box(g, w * 0.6, 0.015, 0.025, '#c0c4c6', 0, h - 0.29, d / 2, METAL);
+      box(g, w, 0.04, d, '#4a4743', 0, h - 0.04, 0);
+    },
+    ovenColumn(g, w, d, h, c) {
+      box(g, w, h, d, c, 0, 0, 0);
+      box(g, w - 0.06, 0.5, 0.01, '#1c1c1c', 0, 0.75, d / 2 + 0.003, { roughness: 0.15 });
+      box(g, w * 0.7, 0.012, 0.025, '#c0c4c6', 0, 1.2, d / 2 + 0.015, METAL);
+      box(g, w - 0.06, 0.36, 0.01, '#1c1c1c', 0, 1.32, d / 2 + 0.003, { roughness: 0.15 });
+      fronts(g, w, 0.65, d, 1, 0.08);
+      fronts(g, w, h - 1.72, d, 1, 1.7);
+    },
+    trashBin(g, w, d, h, c) {
+      cyl(g, w / 2, w * 0.46, h - 0.03, c, 0, 0, 0, METAL, 24);
+      add(g, new THREE.SphereGeometry(w / 2, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(c, METAL), 0, h - 0.03, 0).scale.y = 0.2;
+      box(g, 0.08, 0.015, 0.06, '#2b2b2b', 0, 0, w / 2);
     },
 
     // ---------- plants ----------

@@ -18,16 +18,22 @@ senza build: HTML, CSS e JavaScript modules.
   un muro; scrivi le misure dei lati; dividi o elimina un muro.
 - **Porte e finestre** (anche portefinestre e vetrate scorrevoli): si agganciano ai muri e li tagliano;
   la porta mostra l'arco di apertura.
-- **Mobili e oggetti** (oltre 150): soggiorno, camera, cucina, bagno, ufficio, più
+- **Mobili e oggetti** (quasi 200): soggiorno, camera, cucina, bagno, ufficio, più
   - **soggiorno**: divano angolare, madia, parete attrezzata TV, vetrina, libreria a cubi, mensole sfalsate,
     pensile, tavolino laterale, pouf, poltrona sacco, camino, tende, termosifone;
+  - **cucina**: isola, sgabelli, lavastoviglie, colonna forno, pattumiera, portaspezie e barra portautensili;
+    sul piano bollitore, tostapane, ceppo coltelli, portamestoli, scolapiatti, pentole, barattoli, tagliere;
+  - **bagno**: pensile a specchio, portasciugamani, scaldasalviette, portarotolo, tappetino, cesto biancheria,
+    scaletta portasciugamani, bilancia, set sapone e spazzolini sul lavabo;
   - **ingresso**: scarpiera, panca portascarpe, consolle, appendiabiti a muro e a stelo, portaombrelli;
   - **da appoggiare**: libri, candele, cornice, vaso, fruttiera, cassa audio, giradischi, microonde, macchina del caffè;
-  - **decorazioni**: quadri, poster, arazzo mandala, specchi, orologio, mensola con libri, vaso di fiori;
+  - **decorazioni**: quadri, poster, arazzo mandala, acchiappasogni, specchi, orologio, mensola con libri, vaso di fiori;
   - **tappeti**: persiano, berbero, kilim, passatoia, rotondi;
   - **luci**: lampadario, sospensioni, plafoniera, luci fairy; da terra: classica, ad arco, treppiede, a luce
     indiretta, a sfera, di carta, faro su treppiede, da lettura, a colonna; da tavolo: classica, verde da
-    scrivania, snodata, a fungo, a sfera, con paralume plissé, lanterna;
+    scrivania, snodata, a fungo, a sfera, con paralume plissé, lanterna; mistiche e tribali: lanterna marocchina,
+    lampada di sale, lampada lava, geode di ametista, zucca intagliata, rattan, mandala, Tiffany,
+    sfera di cristallo, totem tribale;
   - **piante**: monstera, sansevieria, palma, ficus, ulivo, felce, cactus, piante grasse, bonsai, pianta pendente;
   - **tecnologia e musica**: PC, portatile, TV a parete, chitarre a parete o su supporto, pianoforti, batteria;
   - **animali**: cucce per cane e gatto, ciotole, tiragraffi, lettiera, acquario;
@@ -36,7 +42,8 @@ senza build: HTML, CSS e JavaScript modules.
   Quadri, specchi e TV si appendono da soli al muro più vicino; i lampadari si agganciano al soffitto.
   PC, portatile, lampade, libri e gli altri oggetti piccoli si posano da soli sul mobile adatto (il PC sulla
   scrivania, il microonde in cucina) e salgono sul piano su cui li trascini (`Alt` per lasciarli a terra);
-  spostando un mobile si porta dietro quello che ha sopra.
+  spostando un mobile si porta dietro quello che ha sopra. Un oggetto nuovo cerca un posto libero:
+  a terra vicino al centro della stanza, a parete un tratto di muro sgombro (non sopra la doccia).
   Dimensioni e colore modificabili, rotazione, aggancio alla griglia e ai muri.
 - **Giardino e patio**: lo strumento *Giardino* disegna una staccionata (o siepe) anche tutto intorno
   alla casa, *Patio* un cordolo per una zona pavimentata. In giardino: alberi, ulivo, cipresso,

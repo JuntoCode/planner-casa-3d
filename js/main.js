@@ -1188,7 +1188,7 @@ function restOnSurface(it, p) {
   // The piece's favourite furniture first (microwave → kitchen), then this room, then the nearest.
   const cost = o => (prefers.length && !prefers.includes(o.type) ? 2e6 : 0) + (room && !G.inRoom(o.x, o.z, room) ? 1e6 : 0) + Math.hypot(o.x - p.x, o.z - p.z);
   const tops = state.items
-    .filter(o => !TYPES[o.type].onTop && !NO_AUTO_REST.has(o.type) && surfaceTop(o) != null && surfaceTop(o) <= 140 && o.w >= it.w && o.d >= it.d * 0.8)
+    .filter(o => !TYPES[o.type].onTop && (!NO_AUTO_REST.has(o.type) || prefers.includes(o.type)) && surfaceTop(o) != null && surfaceTop(o) <= 140 && o.w >= it.w && o.d >= it.d * 0.8)
     .sort((a, b) => cost(a) - cost(b));
   for (const o of tops) {
     const top = surfaceTop(o);
@@ -1223,29 +1223,87 @@ const ridersOf = o => {
 
 // Hang a wall piece (painting, shelf, TV…) on the closest straight wall within `maxDist`:
 // back against the wall face on the side of (x, z). Returns false if no wall is close.
-function mountOnWall(it, x, z, maxDist) {
+// Straight solid walls near (x, z), closest first, with the face looking at the point.
+function wallFaces(x, z, maxDist, minLen) {
   const nm = Plan.nodeMap(state);
-  let best = null;
+  const out = [];
   for (const w of state.walls) {
     if (w.type !== 'wall' || Plan.isCurved(w)) continue;
     const [A, B] = Plan.wallEnds(state, w, nm);
-    const r = G.segDist([x, z], A, B);
-    if (r.d > maxDist || (best && r.d >= best.dist)) continue;
-    const len = G.dist(A, B);
-    if (len < it.w) continue;
+    const r = G.segDist([x, z], A, B), len = G.dist(A, B);
+    if (r.d > maxDist || len < minLen) continue;
     const d = G.norm(G.sub(B, A)), n = G.left(d);
     const side = Math.sign(G.dot(G.sub([x, z], A), n)) || 1;
-    const u = Math.min(Math.max(G.dot(G.sub([x, z], A), d), it.w / 2), len - it.w / 2);
-    best = { dist: r.d, A, d, n: G.mul(n, side), u, t: Plan.wallThickness(state, w) / 2 };
+    out.push({ dist: r.d, A, d, len, n: G.mul(n, side), u0: G.dot(G.sub([x, z], A), d), t: Plan.wallThickness(state, w) / 2 });
   }
-  if (!best) return false;
-  const off = best.t + it.d / 2 + 0.2;
-  const p = G.add(G.add(best.A, G.mul(best.d, best.u)), G.mul(best.n, off));
+  return out.sort((a, b) => a.dist - b.dist);
+}
+
+// Put a wall piece `u` cm along a wall face, its back on the wall and its front (+z) facing out.
+function hangOn(it, f, u) {
+  u = Math.min(Math.max(u, it.w / 2), f.len - it.w / 2);
+  const p = G.add(G.add(f.A, G.mul(f.d, u)), G.mul(f.n, f.t + it.d / 2 + 0.2));
   it.x = Math.round(p[0] * 10) / 10;
   it.z = Math.round(p[1] * 10) / 10;
-  // Local +z (the front) points away from the wall.
-  it.rot = ((Math.round(THREE.MathUtils.radToDeg(Math.atan2(best.n[0], best.n[1]))) % 360) + 360) % 360;
+  it.rot = ((Math.round(THREE.MathUtils.radToDeg(Math.atan2(f.n[0], f.n[1]))) % 360) + 360) % 360;
+}
+
+function mountOnWall(it, x, z, maxDist) {
+  const f = wallFaces(x, z, maxDist, it.w)[0];
+  if (!f) return false;
+  hangOn(it, f, f.u0);
   return true;
+}
+
+// Would `it` stand where it is without bumping into anything (or leaving the rooms)?
+function blocked(it, segs = solidSegments()) {
+  const t = TYPES[it.type];
+  const poly = corners(solidPart(it), 0.5);
+  if (!poly.every(p => t.outdoor || rooms.some(r => G.inRoom(p[0], p[1], r)))) return true;
+  if (!poly.every(p => segs.every(([a, b, h]) => G.segDist(p, a, b).d >= h - 0.6))) return true;
+  if (t.noCollide) return false;
+  return state.items.some(o => o.id !== it.id && !isOpening(o) && !TYPES[o.type].noCollide && TYPES[o.type].hit !== 'posts'
+    && !(it.elev >= o.elev + o.h || o.elev >= it.elev + it.h)
+    && !tucksUnder(it, o) && !tucksUnder(o, it) && !restsOn(it, o) && !restsOn(o, it)
+    && overlap(poly, corners(solidPart(o), 0.5)));
+}
+
+// Wall pieces don't cover each other, even the flat ones that may overlap furniture.
+const overWallPiece = it => state.items.some(o => o.id !== it.id && TYPES[o.type].wallMount
+  && !(it.elev >= o.elev + o.h || o.elev >= it.elev + it.h) && overlap(corners(it, -2), corners(o, 0)));
+
+// A new wall piece: the closest wall stretch where it hangs free (not over the shower, say).
+function hangOnFreeWall(it, p) {
+  const segs = solidSegments(), room = roomAt(p);
+  for (const f of wallFaces(p.x, p.z, Infinity, it.w)) {
+    for (let k = 0; k <= f.len; k += 10) {
+      for (const u of k ? [f.u0 + k, f.u0 - k] : [f.u0]) {
+        if (u < it.w / 2 - 5 || u > f.len - it.w / 2 + 5) continue;
+        hangOn(it, f, u);
+        if (room && !G.inRoom(it.x, it.z, room)) continue;
+        if (!blocked(it, segs) && !overWallPiece(it)) return true;
+      }
+    }
+  }
+  return mountOnWall(it, p.x, p.z, Infinity);
+}
+
+// A new floor piece: the free spot closest to where it was asked for, in the same room.
+function moveToFreeSpot(it) {
+  const segs = solidSegments();
+  if (!blocked(it, segs)) return;
+  const x0 = it.x, z0 = it.z, room = roomAt({ x: x0, z: z0 });
+  for (let r = 10; r <= 500; r += 10) {
+    const n = Math.max(8, Math.round((2 * Math.PI * r) / 15));
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * Math.PI * 2;
+      it.x = snapTo(x0 + Math.cos(a) * r, state.snap);
+      it.z = snapTo(z0 + Math.sin(a) * r, state.snap);
+      if (room && !G.inRoom(it.x, it.z, room)) continue;
+      if (!blocked(it, segs)) return;
+    }
+  }
+  it.x = x0; it.z = z0; // nothing free: leave it where asked (it shows in red)
 }
 
 // ---------- picking ----------
@@ -1684,12 +1742,16 @@ function addItem(type, at) {
     Plan.syncOpenings(state);
   } else {
     it.x = snapTo(p.x, state.snap); it.z = snapTo(p.z, state.snap);
-    if (t.wallMount) mountOnWall(it, it.x, it.z, Infinity);
+    let placed = false;
+    if (t.wallMount) placed = at ? mountOnWall(it, it.x, it.z, Infinity) : hangOnFreeWall(it, p);
     if (t.onTop) {
       const sup = supportUnder(it, it.x, it.z);
-      if (sup) it.elev = sup.top;
-      else if (at || !restOnSurface(it, p)) it.elev = 0;
+      if (sup) { it.elev = sup.top; placed = true; }
+      else if (!at && restOnSurface(it, p)) placed = true;
+      else it.elev = 0;
     }
+    // Dropped from the catalog onto a spot: keep it there; otherwise look for room.
+    if (!placed && !at) moveToFreeSpot(it);
     state.items.push(it);
   }
   refreshItem(it);

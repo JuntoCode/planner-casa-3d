@@ -424,7 +424,7 @@ export function syncRooms(st, prune = false) {
   return rooms;
 }
 
-const KITCHEN = ['kitchenBase', 'sinkUnit', 'hobUnit', 'fridge'];
+const KITCHEN = ['kitchenBase', 'sinkUnit', 'hobUnit', 'fridge', 'dishwasher', 'ovenColumn', 'kitchenIsland'];
 const SOFA = ['sofa3', 'sofa2', 'armchair', 'tvStand', 'cornerSofa', 'tvUnit'];
 const HALL = ['shoeCabinet', 'coatRack', 'coatStand', 'entryBench', 'umbrellaStand'];
 
