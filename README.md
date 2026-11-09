@@ -80,6 +80,11 @@ senza build: HTML, CSS e JavaScript modules.
   Porte e finestre partono chiuse: guardale e premi `E` (o clic, o tocca) per aprirle e chiuderle.
   Le porte girano sui cardini, le finestre aprono le ante verso l'interno, il vasistas si inclina
   e la vetrata scorre. Muri, mobili e porte chiuse non si attraversano.
+- **Telefono e tablet**: su schermi stretti la barra in basso apre Mobili, Pianta ed Elenco in un
+  pannello che sale dal basso (trascina la maniglia per allargarlo o chiuderlo); le opzioni
+  secondarie stanno nel menu `⋯`. Un mobile selezionato mostra pulsanti grandi per ruotare,
+  duplicare ed eliminare; tocca il titolo per tutte le misure. La scena si ridisegna solo quando
+  serve, per risparmiare batteria.
 - **Progetto**: salvataggio automatico nel browser, annulla/ripeti, esporta/importa JSON, foto PNG.
 - Modelli di partenza: trilocale, monolocale, stanza vuota.
 
@@ -94,6 +99,11 @@ senza build: HTML, CSS e JavaScript modules.
 | Annulla / ripeti | `Ctrl+Z` / `Ctrl+Y` |
 | Movimento libero (senza aggancio) | tieni premuto `Alt` mentre trascini |
 | Vista 3D | sinistro ruota, destro sposta, rotella zoom |
+| **Touch**: selezionare | tocca il mobile, il muro o la stanza |
+| **Touch**: spostare | trascina il mobile *già selezionato* (sul resto un dito gira la vista) |
+| **Touch**: vista | un dito gira (3D) o sposta (pianta), due dita zoom e spostamento |
+| **Touch**: centrare su un mobile | doppio tocco |
+| **Touch**: disegnare muri | trascina per mirare, il punto va dove alzi il dito; `Fine` per smettere |
 
 ## Avvio in locale
 

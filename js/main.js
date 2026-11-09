@@ -187,8 +187,11 @@ const roomAt = p => rooms.find(r => G.inRoom(p.x, p.z, r));
 // ---------- three.js setup ----------
 
 const viewport = $('#viewport');
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// Phones get the bottom-sheet layout; touch screens a lighter render (fewer pixels, smaller shadows).
+const PHONE = matchMedia('(max-width: 820px)');
+const COARSE = matchMedia('(pointer: coarse)').matches;
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, COARSE ? 1.5 : 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -205,7 +208,7 @@ scene.background = new THREE.Color('#e7eaee');
 scene.add(new THREE.HemisphereLight('#ffffff', '#b8b0a4', 1.5));
 const sun = new THREE.DirectionalLight('#fff4e2', 1.7);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.setScalar(COARSE ? 1024 : 2048);
 sun.shadow.bias = -0.0003;
 sun.shadow.normalBias = 0.02;
 scene.add(sun, sun.target);
@@ -984,6 +987,11 @@ function enterWalk() {
   controls.enabled = false;
   camera = walkCam;
   document.body.classList.add('walking');
+  // The how-to fades after a few seconds; only "Esci" stays over the view.
+  const wh = $('.walk-hint');
+  wh.classList.remove('seen');
+  clearTimeout(walkHintTimer);
+  walkHintTimer = setTimeout(() => wh.classList.add('seen'), 7000);
   document.querySelectorAll('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.view === 'walk'));
   sun.castShadow = true;
   ceilingsG.visible = true;
@@ -1759,17 +1767,39 @@ function pick() {
 let drag = null;
 let down = null;
 
+// Touch rules (as in SketchUp / Shapr3D): one finger on the selected piece moves it; on anything
+// else it turns or pans the view, and a tap selects. A second finger cancels the edit and the
+// view takes over (pinch, pan). While drawing, the point lands where the finger lifts.
+const touchIds = new Set();
+const isSelected = hit => !!selection && selection.kind === hit.kind && selection.id === hit.id;
+let lastTap = null;
+let walkHintTimer = 0;
+
 canvas.addEventListener('pointerdown', e => {
   if (e.button !== 0 || walking) return;
+  const touch = e.pointerType === 'touch';
+  if (touch) {
+    touchIds.add(e.pointerId);
+    if (touchIds.size > 1) { cancelTouchEdit(); return; }
+  }
   if (cornerPreview) select(null); // an unconfirmed corner preview is dropped first
-  down = { x: e.clientX, y: e.clientY };
+  down = { x: e.clientX, y: e.clientY, touch, t: performance.now() };
   setRay(e);
   const p = floorPoint();
   if (!p) return;
   if (tool !== 'select') {
-    drawDown(p, e);
+    if (touch && tool !== 'room') { down.drawAt = true; drawMove(p, e); } // aim first, place on lift
+    else drawDown(p, e);
   } else {
     const hit = pick();
+    if (touch && hit && hit.kind !== 'node' && hit.kind !== 'curve' && !isSelected(hit)) {
+      down.tap = hit.kind === 'item' || (hit.kind === 'wall' && tab === 'plan') ? { kind: hit.kind, id: hit.id } : null;
+      return; // not selected yet: the finger moves the view, a tap selects
+    }
+    if (touch && !hit && tab === 'plan') {
+      const r = roomAt({ x: p[0], z: p[1] });
+      if (r && !isSelected({ kind: 'room', id: r.id })) { down.tap = { kind: 'room', id: r.id }; return; }
+    }
     if (hit?.kind === 'node') {
       drag = { kind: 'node', id: hit.id, base: structuredClone(state), moved: false };
     } else if (hit?.kind === 'curve') {
@@ -1778,7 +1808,8 @@ canvas.addEventListener('pointerdown', e => {
       select({ kind: 'item', id: hit.id });
       const it = getItem(hit.id);
       const riders = ridersOf(it).map(q => ({ id: q.id, dx: q.x - it.x, dz: q.z - it.z }));
-      drag = { kind: 'item', id: hit.id, off: [it.x - p[0], it.z - p[1]], moved: false, riders };
+      const start = [it, ...riders.map(r => getItem(r.id))].map(q => ({ id: q.id, x: q.x, z: q.z, elev: q.elev, rot: q.rot }));
+      drag = { kind: 'item', id: hit.id, off: [it.x - p[0], it.z - p[1]], moved: false, riders, start };
     } else if (hit?.kind === 'wall' && tab === 'plan') {
       select({ kind: 'wall', id: hit.id });
       drag = { kind: 'wall', id: hit.id, p0: p, base: structuredClone(state), moved: false };
@@ -1800,7 +1831,7 @@ canvas.addEventListener('pointermove', e => {
   if (tool !== 'select') { if (p) drawMove(p, e); return; }
   if (!drag) return hover(e);
   if (!p) return;
-  if (!drag.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 3) return;
+  if (!drag.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) < (down.touch ? 8 : 3)) return;
   drag.moved = true;
   const free = e.altKey;
   if (drag.kind === 'item') dragItem(p, free);
@@ -1823,9 +1854,56 @@ function hover(e) {
   canvas.style.cursor = hit?.kind === 'item' ? 'grab' : '';
 }
 
+// A second finger: undo the move in progress and hand the gesture to the view.
+function cancelTouchEdit() {
+  if (drag?.moved) {
+    if (drag.start) {
+      for (const s of drag.start) {
+        const q = getItem(s.id);
+        if (q) { Object.assign(q, s); placeObj(itemObjs.get(q.id), q); }
+      }
+    }
+    else if (drag.base) { state = structuredClone(drag.base); rebuildGeometry(); }
+    updateOverlay();
+  }
+  drag = null;
+  if (down?.drawAt) clearGroup(drawG);
+  if (tool === 'room' && draw?.p0) { draw = null; clearGroup(drawG); }
+  down = null;
+  controls.enabled = true;
+}
+
+// Double tap on a piece: the view turns around it.
+function focusOn(it) {
+  const c = new THREE.Vector3(it.x / 100, (it.elev + it.h / 2) / 100, it.z / 100);
+  const d = c.clone().sub(controls.target);
+  controls.target.copy(c);
+  camera.position.add(d);
+  controls.update();
+}
+
 function endPointer(e) {
+  if (e.pointerType === 'touch') touchIds.delete(e.pointerId);
   if (walking) return;
-  if (tool !== 'select') { drawUp(e); controls.enabled = true; down = null; return; }
+  const tapped = e.type === 'pointerup' && down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < (down.touch ? 10 : 5);
+  if (tool !== 'select') {
+    if (down?.drawAt && e.type === 'pointerup') { setRay(e); const p = floorPoint(); if (p) drawDown(p, e); }
+    drawUp(e); controls.enabled = true; down = null; return;
+  }
+  if (down?.tap !== undefined && !drag) {
+    const t = down.tap;
+    down = null;
+    if (!tapped) return; // the finger moved the view
+    if (!t) { select(null); return; }
+    select(t);
+    if (t.kind === 'item') lastTap = { id: t.id, at: performance.now() };
+    return;
+  }
+  if (drag && down?.touch && tapped && drag.kind === 'item') {
+    // A second tap on the selected piece: a double tap centres the view on it.
+    if (lastTap?.id === drag.id && performance.now() - lastTap.at < 400) focusOn(getItem(drag.id));
+    lastTap = { id: drag.id, at: performance.now() };
+  }
   if (drag) {
     const { moved, kind, id } = drag;
     drag = null;
@@ -1991,10 +2069,15 @@ function setTool(t) {
   clearGroup(drawG);
   document.querySelectorAll('#tools button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
   const hint = $('#drawHint');
-  hint.innerHTML = TOOLS[t].hint;
+  // Touch: one line for fingers instead of keyboard tips.
+  const touchHint = t === 'room' ? 'Trascina un dito per disegnare la stanza.'
+    : 'Tocca per ogni angolo: trascina il dito per mirare, il punto va dove lo alzi. Due dita spostano la vista. <b>Fine</b> per smettere.';
+  hint.innerHTML = COARSE && TOOLS[t].hint ? touchHint : TOOLS[t].hint;
   hint.hidden = !TOOLS[t].hint;
   canvas.style.cursor = t === 'select' ? '' : 'crosshair';
+  document.body.classList.toggle('drawing', t !== 'select');
   if (t !== 'select') {
+    closeSidebarOnMobile();
     if (tab !== 'plan') setTab('plan');
     if (camera !== ortho) setView('2d');
     select(null);
@@ -2131,6 +2214,8 @@ function select(sel) {
     cornerPreview = null;
     rebuildGeometry();
   }
+  // Phones: a new selection opens its properties compact (name + quick actions), over the scene.
+  if (sel && sel.id !== selection?.id) { propsMin = true; closeSidebarOnMobile(); }
   selection = sel;
   updateOverlay();
   renderProps();
@@ -2302,10 +2387,10 @@ function toast(msg) {
 
 function renderCatalog(filter = '') {
   const f = filter.trim().toLowerCase();
-  const html = CATALOG.map(c => {
+  const html = CATALOG.map((c, ci) => {
     const items = c.items.filter(i => !f || i.name.toLowerCase().includes(f) || c.cat.toLowerCase().includes(f));
     if (!items.length) return '';
-    return `<h4>${c.cat}</h4><div class="cards">${items.map(i => `
+    return `<h4 data-cat="${ci}">${c.cat}</h4><div class="cards">${items.map(i => `
       <button class="card" draggable="true" data-add="${i.type}" title="Clicca per aggiungere, o trascina nella stanza">
         <img data-thumb="${i.type}" src="${THUMBS[i.type] || ''}" alt="">
         <span>${i.name}</span><small>${i.w}×${i.opening ? i.h : i.d} cm</small>
@@ -2323,6 +2408,16 @@ $('#catalog').addEventListener('dragstart', e => {
   if (b) e.dataTransfer.setData('text/plain', b.dataset.add);
 });
 $('#search').addEventListener('input', e => renderCatalog(e.target.value));
+// Category chips: one tap jumps to that part of the catalog (235 pieces are a long list on a phone).
+$('#catChips').innerHTML = CATALOG.map((c, i) => `<button data-cat="${i}">${c.cat}</button>`).join('');
+$('#catChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-cat]');
+  if (!b) return;
+  if ($('#search').value) { $('#search').value = ''; renderCatalog(); }
+  $(`#catalog h4[data-cat="${b.dataset.cat}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  $('#catChips').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  if (PHONE.matches) document.body.classList.add('sheet-full');
+});
 
 function makeThumbs() {
   const size = 128;
@@ -2377,8 +2472,26 @@ function swatch(c, current) {
 const numField = (k, label, v, unit = 'cm', step = 1, extra = '') =>
   `<label class="field"><span>${label}</span><div class="unit"><input type="number" data-k="${k}" value="${Math.round(v * 10) / 10}" step="${step}" ${extra}><em>${unit}</em></div></label>`;
 
+let propsMin = true;
+// On phones: the big buttons shown with the compact properties.
+function quickRow(it) {
+  if (it.kind === 'wall' || it.kind === 'room') {
+    return `<div class="quick-row">
+      <button data-act="more"><i>✎</i>Modifica</button>
+      <button data-act="del" class="danger"><i>🗑</i>Elimina</button></div>`;
+  }
+  const turn = TYPES[it.type].opening
+    ? '<button data-rot="180"><i>⇄</i>Inverti</button>'
+    : '<button data-rot="-90"><i>↺</i>Ruota</button><button data-rot="90"><i>↻</i>Ruota</button>';
+  return `<div class="quick-row">${turn}
+    <button data-act="dup"><i>⧉</i>Duplica</button>
+    <button data-act="del" class="danger"><i>🗑</i>Elimina</button>
+    ${TYPES[it.type].opening ? '<button data-act="more"><i>✎</i>Misure</button>' : ''}</div>`;
+}
+
 function renderProps() {
   const el = $('#props');
+  el.classList.toggle('min', propsMin && selection?.kind !== 'node');
   if (!selection) { el.hidden = true; return; }
   if (selection.kind === 'item') {
     const it = getItem(selection.id);
@@ -2390,6 +2503,7 @@ function renderProps() {
         <div><h3>${t.name}</h3><small>${t.cat}</small></div>
         <button class="x" data-act="close" title="Chiudi (Esc)">×</button>
       </div>
+      ${quickRow(it)}
       <div class="fields">
         ${numField('w', 'Larghezza', it.w)}
         ${t.opening ? '' : numField('d', 'Profondità', it.d)}
@@ -2455,6 +2569,7 @@ function renderProps() {
         <div><h3>${Plan.WALL_TYPES[w.type]}${Plan.isCurved(w) ? ' curvo' : ''}</h3><small>${Math.round(len)} cm</small></div>
         <button class="x" data-act="close" title="Chiudi (Esc)">×</button>
       </div>
+      ${quickRow({ kind: 'wall' })}
       <div class="field"><span>Tipo</span><div class="seg wide-seg">
         ${Object.entries(Plan.WALL_TYPES).map(([k, v]) => `<button data-wtype="${k}" class="${k === w.type ? 'on' : ''}">${v}</button>`).join('')}
       </div></div>
@@ -2487,6 +2602,7 @@ function renderProps() {
         <div><h3>${esc(m.name)}</h3><small>${m2(r.area)} m² · perimetro ${fmtM(G.perimeter(r.pts))} m</small></div>
         <button class="x" data-act="close" title="Chiudi (Esc)">×</button>
       </div>
+      ${quickRow({ kind: 'room' })}
       <label class="field"><span>Tipo di stanza ${m.autoType ? '<small>(riconosciuto in automatico)</small>' : ''}</span><select data-k="type">
         <option value="auto"${m.autoType ? ' selected' : ''}>Automatico</option>
         ${Object.entries(Plan.ROOM_TYPES).map(([k, v]) => `<option value="${k}"${!m.autoType && k === m.type ? ' selected' : ''}>${v.label}</option>`).join('')}
@@ -2573,6 +2689,12 @@ $('#props').addEventListener('input', e => {
 });
 $('#props').addEventListener('click', e => {
   const b = e.target.closest('button');
+  // Phones: tapping the title (or "Modifica") opens or folds the details.
+  if ((!b && e.target.closest('.props-head')) || b?.dataset.act === 'more') {
+    propsMin = !propsMin;
+    $('#props').classList.toggle('min', propsMin);
+    return;
+  }
   if (!b) return;
   if (b.dataset.radius) {
     previewCorner(+b.dataset.radius);
@@ -2773,6 +2895,7 @@ function setTab(name) {
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === name));
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x.id === 'tab-' + name));
   document.body.classList.toggle('rooms-mode', name === 'plan');
+  document.querySelectorAll('#bottomNav button').forEach(b => b.classList.toggle('on', b.dataset.sheet === name));
   if (name !== 'plan' && tool !== 'select') setTool('select');
   showHover();
   updateOverlay();
@@ -2780,7 +2903,10 @@ function setTab(name) {
 document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 document.querySelectorAll('#tools button').forEach(b => b.addEventListener('click', () => { setTool(b.dataset.tool); renderPlanTab(); }));
 
-document.querySelectorAll('#viewSeg button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+document.querySelectorAll('#viewSeg button').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.view === 'walk') closeSidebarOnMobile();
+  setView(b.dataset.view);
+}));
 $('#envMode').addEventListener('change', e => {
   state.env = e.target.value;
   updateEnv();
@@ -2857,8 +2983,70 @@ $('#importInput').addEventListener('change', async e => {
   }
 });
 
-function closeSidebarOnMobile() { if (matchMedia('(max-width: 820px)').matches) document.body.classList.remove('sidebar-open'); }
-$('#menuBtn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
+// ---------- phones: bottom bar, bottom sheet, "⋯" menu ----------
+// The side panel is a bottom sheet (closed, half or full height); the bottom bar opens its tabs.
+
+function syncNav() {
+  document.querySelectorAll('#bottomNav button').forEach(b => b.classList.toggle('on', b.dataset.sheet === tab));
+}
+function openSheet(name) {
+  if (name && name !== tab) setTab(name);
+  document.body.classList.add('sheet-open');
+  syncNav();
+}
+function closeSheet() {
+  document.body.classList.remove('sheet-open', 'sheet-full');
+  syncNav();
+}
+function closeSidebarOnMobile() { if (PHONE.matches) closeSheet(); }
+$('#bottomNav').addEventListener('click', e => {
+  const b = e.target.closest('[data-sheet]');
+  if (!b) return;
+  closeMore();
+  if (document.body.classList.contains('sheet-open') && tab === b.dataset.sheet) closeSheet();
+  else openSheet(b.dataset.sheet);
+});
+// Drag the handle: up for full height, down to shrink or close; a tap switches half / full.
+$('#sheetHandle').addEventListener('pointerdown', e => {
+  const sheet = $('#sidebar'), y0 = e.clientY;
+  let dy = 0;
+  document.body.classList.add('sheet-drag');
+  e.currentTarget.setPointerCapture(e.pointerId);
+  const move = ev => { dy = ev.clientY - y0; sheet.style.transform = dy > 0 ? `translateY(${dy}px)` : ''; };
+  const up = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    window.removeEventListener('pointercancel', up);
+    document.body.classList.remove('sheet-drag');
+    sheet.style.transform = '';
+    const full = document.body.classList.contains('sheet-full');
+    if (Math.abs(dy) < 8) document.body.classList.toggle('sheet-full', !full);
+    else if (dy < -40) document.body.classList.add('sheet-full');
+    else if (dy > 40) { if (full && dy < 220) document.body.classList.remove('sheet-full'); else closeSheet(); }
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  window.addEventListener('pointercancel', up);
+});
+// Secondary options (outside, walls, floors, export…) live in the "⋯" menu on phones.
+function closeMore() {
+  document.body.classList.remove('more-open');
+  $('#moreBtn').setAttribute('aria-expanded', 'false');
+}
+$('#moreBtn').addEventListener('click', () => {
+  const open = !document.body.classList.contains('more-open');
+  document.body.classList.toggle('more-open', open);
+  $('#moreBtn').setAttribute('aria-expanded', String(open));
+});
+document.addEventListener('pointerdown', e => {
+  if (document.body.classList.contains('more-open') && !e.target.closest('#topMore, #moreBtn')) closeMore();
+}, true);
+$('#topMore').addEventListener('click', e => { if (e.target.closest('button, label')) closeMore(); });
+$('#drawDone').addEventListener('click', () => {
+  finishDraw();
+  setTool('select');
+  renderPlanTab();
+});
 
 window.addEventListener('keydown', e => {
   if (walking || e.target.closest?.('input, select, textarea, dialog')) return;
@@ -2921,18 +3109,31 @@ fitView();
 commit();
 rebuildRooms();
 renderPlanTab();
+syncNav();
 makeThumbs();
 if (savedBroken) toast('Il progetto salvato non si apre: ne ho conservato una copia nel browser, non è stato cancellato.');
 else if (!saved) wizard.open();
 
+// Render on demand: draw while something happens (input, camera easing, walking), then rest.
+// Saves battery and heat on phones; a slow heartbeat catches anything that changed quietly.
+let awakeUntil = 0, lastFrame = 0;
+const wake = (ms = 1500) => { awakeUntil = Math.max(awakeUntil, performance.now() + ms); };
+for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'keydown', 'keyup', 'input', 'change', 'click']) {
+  window.addEventListener(ev, () => wake(), { capture: true, passive: true });
+}
+new ResizeObserver(() => wake()).observe(viewport);
+document.addEventListener('visibilitychange', () => wake());
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
-  const dt = clock.getDelta();
+  const dt = clock.getDelta(), now = performance.now();
+  let moving = false;
   if (walking) {
     walker.update(dt);
     animateOpenings(dt);
-    updateUseHint(performance.now());
-  } else controls.update();
+    updateUseHint(now);
+  } else moving = controls.update(); // true while the camera still eases after a drag
+  if (!walking && !moving && now > awakeUntil && now - lastFrame < 2000) return;
+  lastFrame = now;
   updateWallFade();
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);

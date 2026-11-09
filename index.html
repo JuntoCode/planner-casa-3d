@@ -2,7 +2,12 @@
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Planner Casa">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Planner Casa 3D</title>
   <meta name="description" content="Progetta il tuo appartamento in 3D: disegna le stanze, aggiungi porte, finestre e mobili.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6fde'/%3E%3Cpath d='M7 16 16 8l9 8v9H19v-6h-6v6H7z' fill='white'/%3E%3C/svg%3E">
@@ -18,7 +23,6 @@
 </head>
 <body>
   <header class="topbar">
-    <button id="menuBtn" class="icon-btn only-mobile" title="Pannello">☰</button>
     <div class="brand">
       <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M7 16 16 8l9 8v9H19v-6h-6v6H7z" fill="#fff"/></svg>
       <span>Planner Casa 3D</span>
@@ -34,6 +38,9 @@
       <button data-view="2d">Pianta</button>
       <button data-view="walk" title="Cammina in prima persona dentro la casa">Cammina</button>
     </div>
+    <button id="moreBtn" class="icon-btn only-mobile" title="Altre opzioni" aria-haspopup="true" aria-expanded="false">⋯</button>
+    <div id="topMore" class="top-more">
+    <div class="more-title only-mobile">Opzioni</div>
     <select id="floorSel" title="Piano che stai modificando (PagSu / PagGiù mentre cammini)"></select>
     <select id="envMode" title="Cosa c'è fuori casa">
       <option value="country">Fuori: campagna</option>
@@ -47,16 +54,18 @@
       <option value="low">Muri: bassi</option>
     </select>
     <button id="newBtn" class="primary-soft" title="Crea una nuova casa con il menu guidato">✦ Nuova casa</button>
-    <div class="group hide-narrow">
+    <div class="group more-actions">
       <button id="fitBtn" title="Inquadra tutto">Centra</button>
       <button id="photoBtn" title="Salva un'immagine PNG">Foto</button>
       <button id="exportBtn" title="Scarica il progetto (.json)">Esporta</button>
       <label class="btn" title="Apri un progetto (.json)">Importa<input type="file" id="importInput" accept=".json,application/json" hidden></label>
     </div>
+    </div>
   </header>
 
   <main>
     <aside id="sidebar">
+      <div id="sheetHandle" class="sheet-handle only-mobile" role="button" aria-label="Allarga o chiudi il pannello"><i></i></div>
       <nav class="tabs">
         <button data-tab="furniture" class="on">Mobili</button>
         <button data-tab="plan">Pianta</button>
@@ -64,7 +73,10 @@
       </nav>
       <section id="tab-furniture" class="tab on">
         <div id="styleBar" class="style-bar"></div>
-        <input id="search" type="search" placeholder="Cerca: letto, divano, porta…" autocomplete="off">
+        <div class="cat-head">
+          <input id="search" type="search" placeholder="Cerca: letto, divano, porta…" autocomplete="off">
+          <div id="catChips" class="cat-chips" aria-label="Vai alla categoria"></div>
+        </div>
         <div id="catalog"></div>
       </section>
       <section id="tab-plan" class="tab"></section>
@@ -82,6 +94,7 @@
         <button data-tool="curb" title="Bordo di un patio o vialetto esterno"><i>▱</i><span>Patio</span></button>
       </div>
       <div id="drawHint" class="draw-hint" hidden></div>
+      <button id="drawDone" class="draw-done primary">Fine</button>
       <div class="walk-ui">
         <div class="crosshair"></div>
         <div id="useHint" class="use-hint" hidden></div>
@@ -108,6 +121,12 @@
       </div>
     </div>
   </main>
+
+  <nav id="bottomNav" class="bottom-nav" aria-label="Sezioni">
+    <button data-sheet="furniture"><i>🛋</i><span>Mobili</span></button>
+    <button data-sheet="plan"><i>📐</i><span>Pianta</span></button>
+    <button data-sheet="list"><i>☰</i><span>Elenco</span></button>
+  </nav>
 
   <noscript>Serve JavaScript per usare il planner.</noscript>
   <script type="module" src="js/main.js"></script>
