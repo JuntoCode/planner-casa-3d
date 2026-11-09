@@ -220,10 +220,15 @@ body.walk-locked #scene { cursor: none; }
 }
 .walk-hint kbd { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.3); color: #fff; margin: 0 1px; }
 .walk-hint button { background: #fff; border-color: #fff; color: var(--text); font-weight: 600; }
-.walk-hint .touch { display: none; }
+.use-hint {
+  position: absolute; left: 50%; top: calc(50% + 16px); transform: translateX(-50%); z-index: 3; pointer-events: none;
+  background: rgba(29, 36, 48, .8); color: #fff; border-radius: 8px; padding: 4px 10px; font-size: 12.5px; white-space: nowrap;
+}
+.use-hint kbd { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.3); color: #fff; margin-right: 4px; }
+.walk-hint .touch, .use-hint .touch { display: none; }
 @media (pointer: coarse) {
-  .walk-hint .desk { display: none; }
-  .walk-hint .touch { display: inline; }
+  .walk-hint .desk, .use-hint .desk { display: none; }
+  .walk-hint .touch, .use-hint .touch { display: inline; }
 }
 
 /* drawing tools */

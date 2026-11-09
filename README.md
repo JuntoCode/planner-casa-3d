@@ -27,9 +27,11 @@ senza build: HTML, CSS e JavaScript modules.
   può essere indipendente o un appartamento al 1°, 3°, 6° o 10° piano di un palazzo.
 - **Controlli**: sovrapposizioni e mobili fuori dai muri vengono segnalati in rosso.
 - **Viste**: 3D con muri che si nascondono verso la camera, pianta 2D dall'alto, muri alti/bassi.
-- **Cammina**: visita in prima persona con soffitti e porte aperte; mouse + `WASD`/frecce (`Shift` per
+- **Cammina**: visita in prima persona con i soffitti; mouse + `WASD`/frecce (`Shift` per
   correre), su telefono trascina a sinistra per camminare e a destra per guardarti intorno.
-  Muri e mobili non si attraversano.
+  Porte e finestre partono chiuse: guardale e premi `E` (o clic, o tocca) per aprirle e chiuderle.
+  Le porte girano sui cardini, le finestre aprono le ante verso l'interno, il vasistas si inclina
+  e la vetrata scorre. Muri, mobili e porte chiuse non si attraversano.
 - **Progetto**: salvataggio automatico nel browser, annulla/ripeti, esporta/importa JSON, foto PNG.
 - Modelli di partenza: trilocale, monolocale, stanza vuota.
 

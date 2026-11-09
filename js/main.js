@@ -581,12 +581,11 @@ function makeItemObj(it) {
   placeObj(o, it);
   o.userData = { kind: 'item', id: it.id };
   if (lowWalls() && isOpening(it)) o.traverse(c => { if (c.userData.tall) c.visible = false; });
-  if (walking) {
-    // Walking: doors stand open so you can go through, without the plan's swing marks.
-    o.traverse(c => {
-      if (c.userData.leaf) c.rotation.y = -Math.PI / 2;
-      if (c.userData.swing) c.visible = false;
-    });
+  if (walking && isOpening(it)) {
+    // Walking: no swing marks; doors and windows keep whatever you opened.
+    o.traverse(c => { if (c.userData.swing) c.visible = false; });
+    o.userData.side = openSide(it);
+    poseOpening(o, openK(it.id));
   }
   return o;
 }
@@ -614,7 +613,110 @@ function refreshItem(it) {
 // After the walls changed: rooms, floors, walls, doors/windows, overlay.
 // ---------- first-person walk ----------
 
-// What blocks you while walking: solid walls minus their door openings, and furniture.
+// ---------- doors and windows while walking ----------
+// Everything starts closed; id -> { k: 0 closed .. 1 open, to: where it is going }.
+const openings = new Map();
+const openK = id => openings.get(id)?.k || 0;
+const OPEN_SPEED = 1.6; // full swings per second
+const PASS_AT = 0.6;    // a door lets you through once it is this far open
+
+// Turn or slide every moving part of an opening (userData.move from catalog.js).
+function poseOpening(o, k) {
+  const e = k * k * (3 - 2 * k);
+  o.traverse(c => {
+    const m = c.userData.move;
+    if (!m) return;
+    if (m.slide) c.position.x = m.x0 + m.slide * e;
+    else c.rotation[m.axis] = m.to * e * (o.userData.side || 1);
+  });
+}
+
+const planDir = it => { const r = THREE.MathUtils.degToRad(it.rot); return [Math.cos(r), -Math.sin(r)]; }; // local +x
+const indoorAt = p => { const r = roomAt({ x: p[0], z: p[1] }); return !!r && !['terrace', 'balcony'].includes(r.meta.type); };
+
+// Doors open the way the plan shows (flip); windows always open into the room.
+function openSide(it) {
+  if (isDoor(it)) return 1;
+  const [dx, dz] = planDir(it), nz = [-dz, dx]; // local +z on the plan
+  const p = s => [it.x + nz[0] * 60 * s, it.z + nz[1] * 60 * s];
+  return !indoorAt(p(1)) && indoorAt(p(-1)) ? -1 : 1;
+}
+
+const walkThrough = it => it.elev < 40 && it.elev + it.h > 180;
+const canOpen = it => isOpening(it) && TYPES[it.type].build !== 'arch';
+const passable = it => walkThrough(it) && (!canOpen(it) || openK(it.id) >= PASS_AT);
+
+// Free span of a passable opening along its wall, in cm from the wall start (d: wall direction).
+function gapOf(it, d) {
+  if (TYPES[it.type].build !== 'slider') return [it.t - it.w / 2 + 6, it.t + it.w / 2 - 6];
+  // The slider opens only on the side whose panel slides away (local +x).
+  const s = Math.sign(G.dot(planDir(it), d)) || 1;
+  return s > 0 ? [it.t + 6, it.t + it.w / 2 - 6] : [it.t - it.w / 2 + 6, it.t - 6];
+}
+
+function toggleOpening(it) {
+  const st = openings.get(it.id) || { k: 0, to: 0 };
+  if (st.to && walkThrough(it)) {
+    // Closing a door on yourself would shove you through the wall.
+    const dir = planDir(it), half = G.mul(dir, it.w / 2), c = [it.x, it.z];
+    if (G.segDist(walker.position, G.sub(c, half), G.add(c, half)).d < 45) { toast('Spostati dalla soglia per chiudere.'); return; }
+  }
+  st.to = st.to ? 0 : 1;
+  openings.set(it.id, st);
+}
+
+function animateOpenings(dt) {
+  for (const [id, st] of openings) {
+    if (st.k === st.to) continue;
+    const was = st.k >= PASS_AT;
+    st.k = st.to ? Math.min(1, st.k + dt * OPEN_SPEED) : Math.max(0, st.k - dt * OPEN_SPEED);
+    const o = itemObjs.get(id);
+    if (o) poseOpening(o, st.k);
+    if (st.k >= PASS_AT !== was) walker.refresh();
+  }
+}
+
+// The door or window under the crosshair (or under a tap), within arm's reach.
+const useRay = new THREE.Raycaster();
+useRay.far = 2.4;
+function aimedOpening(ndc = { x: 0, y: 0 }) {
+  walkCam.updateMatrixWorld();
+  useRay.setFromCamera(ndc, walkCam);
+  const hit = useRay.intersectObjects([wallsG, itemsG], true).find(h => h.object.visible && !h.object.userData.swing);
+  let o = hit?.object;
+  while (o && o.userData.kind !== 'item') o = o.parent;
+  const it = o && state.items.find(i => i.id === o.userData.id);
+  return it && canOpen(it) ? it : null;
+}
+
+function useAt(cx, cy) {
+  let ndc;
+  if (cx != null) {
+    const r = canvas.getBoundingClientRect();
+    ndc = { x: ((cx - r.left) / r.width) * 2 - 1, y: -((cy - r.top) / r.height) * 2 + 1 };
+  }
+  const it = aimedOpening(ndc);
+  if (it) toggleOpening(it);
+  lastAim = 0; // refresh the hint now
+}
+
+const useHint = document.getElementById('useHint');
+let lastAim = 0, aimId = null;
+function updateUseHint(now) {
+  if (now - lastAim < 120) return;
+  lastAim = now;
+  const it = aimedOpening();
+  const key = it ? it.id + (openings.get(it.id)?.to ? '1' : '0') : null;
+  if (key === aimId) return;
+  aimId = key;
+  useHint.hidden = !it;
+  if (!it) return;
+  const verb = openings.get(it.id)?.to ? 'Chiudi' : 'Apri';
+  const name = TYPES[it.type].name.toLowerCase();
+  useHint.innerHTML = `<span class="desk"><kbd>E</kbd>${verb} ${name}</span><span class="touch">Tocca: ${verb.toLowerCase()} ${name}</span>`;
+}
+
+// What blocks you while walking: solid walls minus the openings you can pass, and furniture.
 function walkColliders() {
   const nm = Plan.nodeMap(state);
   const segs = [];
@@ -629,8 +731,8 @@ function walkColliders() {
     const [A, B] = path, len = G.dist(A, B), d = G.norm(G.sub(B, A));
     const at = t => G.add(A, G.mul(d, t));
     // Openings that reach the floor and are tall enough to walk through.
-    const gaps = state.items.filter(it => it.wall === w.id && it.elev < 40 && it.elev + it.h > 180)
-      .map(it => [it.t - it.w / 2 + 6, it.t + it.w / 2 - 6]).sort((a, b) => a[0] - b[0]);
+    const gaps = state.items.filter(it => it.wall === w.id && passable(it))
+      .map(it => gapOf(it, d)).sort((a, b) => a[0] - b[0]);
     let cur = 0;
     for (const [s, e] of gaps) { if (s > cur) segs.push([at(cur), at(s), h]); cur = Math.max(cur, e); }
     if (cur < len) segs.push([at(cur), at(len), h]);
@@ -641,7 +743,7 @@ function walkColliders() {
   return { segs, boxes };
 }
 
-const walker = createWalker({ canvas, camera: walkCam, colliders: walkColliders, onExit: () => setView('3d') });
+const walker = createWalker({ canvas, camera: walkCam, colliders: walkColliders, onExit: () => setView('3d'), onUse: useAt });
 
 function enterWalk() {
   if (walking) return;
@@ -670,6 +772,8 @@ function enterWalk() {
   ceilingsG.visible = true;
   indoorLight.visible = true;
   updateEnv(); // apartments: the floors above appear
+  openings.clear(); // doors and windows start closed
+  aimId = null;
   rebuildWalls();
   rebuildItems();
   updateOverlay();
@@ -680,6 +784,8 @@ function exitWalk() {
   walker.stop();
   walking = false;
   document.body.classList.remove('walking');
+  openings.clear();
+  useHint.hidden = true;
   ceilingsG.visible = false;
   indoorLight.visible = false;
   updateEnv();
@@ -2123,8 +2229,11 @@ else if (!saved) wizard.open();
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
-  if (walking) walker.update(dt);
-  else controls.update();
+  if (walking) {
+    walker.update(dt);
+    animateOpenings(dt);
+    updateUseHint(performance.now());
+  } else controls.update();
   updateWallFade();
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
@@ -2133,5 +2242,5 @@ renderer.setAnimationLoop(() => {
 // Handy for debugging from the browser console.
 window.planner = {
   get state() { return state; }, get rooms() { return rooms; }, get camera() { return camera; }, get controls() { return controls; }, scene, walker,
-  select, addItem, setView, setTab, setTool, undo, wizard, startProject, findConflicts,
+  select, addItem, setView, setTab, setTool, undo, wizard, startProject, findConflicts, walkColliders,
 };

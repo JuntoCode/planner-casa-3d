@@ -302,11 +302,8 @@ const B = {
     for (const s of [-1, 1]) box(g, f, h, d + 0.03, WHITE, s * (w / 2 - f / 2), 0, 0);
     box(g, w, f, d + 0.03, WHITE, 0, h - f, 0);
     const lw = w - 2 * f;
-    // The leaf turns on its hinge (left side): closed in the plan, open when walking.
-    const leaf = new THREE.Group();
-    leaf.position.set(-lw / 2, 0, 0);
-    leaf.userData.leaf = true;
-    g.add(leaf);
+    // The leaf turns on its hinge (left side) towards +z; walking you open and close it.
+    const leaf = hinged(g, -lw / 2, 0, 0, { axis: 'y', to: -Math.PI / 2 });
     box(leaf, lw, h - f - 0.01, 0.04, c, lw / 2, 0.01, 0);
     box(leaf, 0.12, 0.02, 0.06, '#9a9a9a', lw - 0.1, 1.0, 0, METAL);
     g.children.forEach(m => { m.userData.tall = true; });
@@ -329,28 +326,74 @@ const B = {
     box(g, w, f, d + 0.02, c, 0, h - f, 0);
     g.children.forEach(m => { m.userData.tall = true; });
   },
+  // Casement window or French window: one sash, or two meeting in the middle when wide.
+  // The sashes swing towards +z (main.js mirrors them so they open into the room).
   window(g, w, d, h, c) {
     const f = 0.05;
-    for (const s of [-1, 1]) box(g, f, h, d + 0.02, c, s * (w / 2 - f / 2), 0, 0);
-    box(g, w, f, d + 0.02, c, 0, h - f, 0);
-    box(g, w + 0.06, 0.03, d + 0.08, WHITE, 0, -0.03, 0.02);
-    box(g, w, f, d + 0.02, c, 0, 0, 0);
-    if (w > 0.8) box(g, f, h - 2 * f, 0.05, c, 0, f, 0);
-    box(g, w - 2 * f, h - 2 * f, 0.01, '#bfe0f0', 0, f, 0, GLASS);
+    frame(g, w, d, h, c, f);
+    if (h < 1.8) box(g, w + 0.06, 0.03, d + 0.08, WHITE, 0, -0.03, 0.02);
+    const iw = w - 2 * f, ih = h - 2 * f;
+    if (w > 0.8) {
+      for (const s of [-1, 1]) {
+        const sash = hinged(g, s * iw / 2, f, 0, { axis: 'y', to: s * Math.PI / 2 });
+        glassPane(sash, iw / 2, ih, c, (-s * iw) / 4, -s);
+      }
+    } else {
+      const sash = hinged(g, -iw / 2, f, 0, { axis: 'y', to: -Math.PI / 2 });
+      glassPane(sash, iw, ih, c, iw / 2, 1);
+    }
     g.children.forEach(m => { m.userData.tall = true; });
   },
-  // Small high window for bathrooms: bottom-hinged sash, frosted glass, handle on top.
+  // Lift-and-slide glass wall: the right panel slides behind the left one.
+  slider(g, w, d, h, c) {
+    const f = 0.05;
+    frame(g, w, d, h, c, f);
+    const iw = w - 2 * f, ih = h - 2 * f, pw = iw / 2 + 0.03;
+    const fixed = new THREE.Group();
+    fixed.position.set(-iw / 2 + pw / 2, f, -0.027);
+    g.add(fixed);
+    glassPane(fixed, pw, ih, c, 0, 0);
+    const moving = hinged(g, iw / 2 - pw / 2, f, 0.027, { slide: -(pw - 0.1) });
+    glassPane(moving, pw, ih, c, 0, -1);
+    g.children.forEach(m => { m.userData.tall = true; });
+  },
+  // Small high window for bathrooms: bottom-hinged sash that tilts in, frosted glass, handle on top.
   vasistas(g, w, d, h, c) {
     const f = 0.04;
-    for (const s of [-1, 1]) box(g, f, h, d + 0.02, c, s * (w / 2 - f / 2), 0, 0);
-    box(g, w, f, d + 0.02, c, 0, h - f, 0);
-    box(g, w, f, d + 0.02, c, 0, 0, 0);
+    frame(g, w, d, h, c, f);
     box(g, w - 2 * f, 0.012, 0.03, shade(c, -0.12), 0, f, 0);
-    box(g, w - 2 * f, h - 2 * f, 0.012, '#d3e3ea', 0, f, 0, { transparent: true, opacity: 0.75, roughness: 0.55 });
-    for (const s of [-1, 1]) box(g, 0.1, 0.018, 0.025, '#9a9a9a', 0, h - f - 0.04, s * 0.02, METAL);
+    const sh = h - 2 * f;
+    const sash = hinged(g, 0, f, 0, { axis: 'x', to: 0.38 });
+    box(sash, w - 2 * f, sh, 0.012, '#d3e3ea', 0, 0, 0, { transparent: true, opacity: 0.75, roughness: 0.55 });
+    for (const s of [-1, 1]) box(sash, 0.1, 0.018, 0.025, '#9a9a9a', 0, sh - 0.04, s * 0.02, METAL);
     g.children.forEach(m => { m.userData.tall = true; });
   },
 };
+
+// A part that opens: a group placed on its hinge (or slide start) carrying userData.move,
+// which main.js animates: { axis, to } turns it by `to` radians, { slide } moves it along x.
+function hinged(g, x, y, z, move) {
+  const p = new THREE.Group();
+  p.position.set(x, y, z);
+  p.userData.move = { ...move, x0: x };
+  g.add(p);
+  return p;
+}
+
+function frame(g, w, d, h, c, f) {
+  for (const s of [-1, 1]) box(g, f, h, d + 0.02, c, s * (w / 2 - f / 2), 0, 0);
+  box(g, w, f, d + 0.02, c, 0, h - f, 0);
+  box(g, w, f, d + 0.02, c, 0, 0, 0);
+}
+
+// Glass with a thin sash profile, centred at x = cx; `handle` puts the handle on that side (0: none).
+function glassPane(g, w, h, c, cx, handle) {
+  const p = 0.04;
+  for (const s of [-1, 1]) box(g, p, h, 0.05, c, cx + s * (w / 2 - p / 2), 0, 0);
+  for (const y of [0, h - p]) box(g, w - 2 * p, p, 0.05, c, cx, y, 0);
+  box(g, w - 2 * p, h - 2 * p, 0.01, '#bfe0f0', cx, p, 0, GLASS);
+  if (handle) box(g, 0.025, 0.13, 0.03, '#9a9a9a', cx + handle * (w / 2 - 0.06), Math.min(1.05, h / 2), 0.035, METAL);
+}
 
 function mulberry(a) {
   return () => {
@@ -419,7 +462,7 @@ export const CATALOG = [
     { type: 'windowSmall', name: 'Finestra piccola', build: 'window', w: 60, d: 10, h: 80, elev: 120, color: '#f4f3ef', opening: true },
     { type: 'balcony', name: 'Portafinestra 2 ante', build: 'window', w: 140, d: 10, h: 230, elev: 0, color: '#f4f3ef', opening: true },
     { type: 'balcony1', name: 'Portafinestra 1 anta', build: 'window', w: 80, d: 10, h: 230, elev: 0, color: '#f4f3ef', opening: true },
-    { type: 'slider', name: 'Vetrata scorrevole', build: 'window', w: 240, d: 10, h: 230, elev: 0, color: '#3b3f45', opening: true },
+    { type: 'slider', name: 'Vetrata scorrevole', build: 'slider', w: 240, d: 10, h: 230, elev: 0, color: '#3b3f45', opening: true },
   ] },
 ];
 
