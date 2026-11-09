@@ -11,6 +11,9 @@ export const ENVIRONMENTS = {
   neutral: 'Neutro',
 };
 
+export const LEVELS = { 0: 'Casa indipendente', 1: 'Appartamento, 1° piano', 3: 'Appartamento, 3° piano', 6: 'Appartamento, 6° piano', 10: 'Appartamento, 10° piano' };
+const FLOOR = 3.1; // floor-to-floor height, m
+
 const SKIES = {
   country: { top: '#4f8fd6', horizon: '#dcebf5', ground: '#6d8f4c' },
   city: { top: '#6f9bcf', horizon: '#e4e8ec', ground: '#8f8a83' },
@@ -40,9 +43,11 @@ export function createEnvironment(scene, ground, grid) {
 
   const neutralGround = ground.material;
   let kind = null, key = '';
+  let hostTop = null; // floors above the apartment
   const owned = []; // geometries/materials to free on rebuild
 
   function clear() {
+    hostTop = null;
     while (props.children.length) props.remove(props.children[0]);
     owned.forEach(o => o.dispose());
     owned.length = 0;
@@ -102,7 +107,32 @@ export function createEnvironment(scene, ground, grid) {
     props.add(path);
   }
 
-  function buildCity(b) {
+  // Apartment: the home is one floor of a building. The floors below are always
+  // there; the ones above only show while walking (they would hide the 3D view).
+  function hostBuilding(b, level, wallH, box) {
+    const r = rng(19);
+    const fw = b.w + 0.8, fd = b.d + 0.8, below = level * FLOOR - 0.03;
+    const mat = keep(new THREE.MeshStandardMaterial({ map: facadeTexture('#e6dccd', '#5d7385', 21), roughness: 0.9 }));
+    const body = (h, y) => {
+      const geo = keep(box.clone());
+      scaleFacadeUVs(geo, fw, h, fd);
+      const m = new THREE.Mesh(geo, mat);
+      m.scale.set(fw, h, fd);
+      m.position.set(b.cx, y + h / 2, b.cz);
+      props.add(m);
+      return m;
+    };
+    body(below, 0);
+    // A thin slab edge at the home's floor, like the floor of a real building.
+    const slab = new THREE.Mesh(box, keep(new THREE.MeshStandardMaterial({ color: '#cfc7ba', roughness: 0.9 })));
+    slab.scale.set(fw + 0.1, 0.12, fd + 0.1);
+    slab.position.set(b.cx, below - 0.06 + 0.03, b.cz);
+    props.add(slab);
+    const above = (2 + Math.floor(r() * 3)) * FLOOR;
+    hostTop = body(above, level * FLOOR + wallH + 0.02);
+  }
+
+  function buildCity(b, level = 0, wallH = 2.7) {
     const r = rng(11);
     const roadZ = b.minZ - 9;
     // Street in front of the home, with sidewalks.
@@ -124,6 +154,7 @@ export function createEnvironment(scene, ground, grid) {
     const glass = ['#5d7385', '#6f8796', '#4f6474'];
     const mats = walls.map((w, i) => keep(new THREE.MeshStandardMaterial({ map: facadeTexture(w, glass[i % 3], i + 3), roughness: 0.9 })));
     const box = keep(new THREE.BoxGeometry(1, 1, 1));
+    if (level > 0) hostBuilding(b, level, wallH, box);
     const clearX = b.w / 2 + 8, clearZ = b.d / 2 + 8;
     for (let gx = -6; gx <= 6; gx++) {
       for (let gz = -6; gz <= 6; gz++) {
@@ -159,14 +190,21 @@ export function createEnvironment(scene, ground, grid) {
     uv.needsUpdate = true;
   }
 
-  function apply(nextKind, b, planView) {
-    const nextKey = `${nextKind}|${Math.round(b.cx)}|${Math.round(b.cz)}|${Math.round(b.w)}|${Math.round(b.d)}`;
+  // opts: { level: floor number in the city (0 = detached house), walking, wallH (m) }
+  function apply(nextKind, b, planView, opts = {}) {
+    const level = nextKind === 'city' ? opts.level || 0 : 0;
+    const wallH = opts.wallH || 2.7;
+    const nextKey = `${nextKind}|${level}|${wallH}|${Math.round(b.cx)}|${Math.round(b.cz)}|${Math.round(b.w)}|${Math.round(b.d)}`;
     if (nextKey !== key) {
       key = nextKey;
       kind = nextKind;
       clear();
       if (kind === 'country') buildCountry(b);
-      if (kind === 'city') buildCity(b);
+      if (kind === 'city') buildCity(b, level, wallH);
+      // On an upper floor the whole street drops below the home's floor.
+      const drop = -level * FLOOR;
+      ground.position.y = -0.01 + drop;
+      props.position.y = drop;
       if (kind === 'neutral') {
         ground.material = neutralGround;
       } else {
@@ -190,6 +228,7 @@ export function createEnvironment(scene, ground, grid) {
     sky.position.set(b.cx, 0, b.cz);
     grid.visible = kind === 'neutral';
     props.visible = !planView;
+    if (hostTop) hostTop.visible = !!opts.walking;
   }
 
   return { apply };

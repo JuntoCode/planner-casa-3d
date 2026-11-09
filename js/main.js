@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { CATALOG, TYPES, SWATCHES, WOOD_SWATCHES, STYLES, styleColor, baseColor, isWood, buildModel } from './catalog.js';
 import { FLOORS, TILE_M, WOODS, floorTexture, woodTexture } from './textures.js';
-import { ENVIRONMENTS, createEnvironment } from './env.js';
+import { ENVIRONMENTS, LEVELS, createEnvironment } from './env.js';
 import { PRESETS } from './presets.js';
 import { createWizard } from './wizard.js';
 import * as G from './geometry.js';
@@ -57,6 +57,8 @@ function normalize(d) {
     wallT: +s.wallT || 10,
     snap: +s.snap || 5,
     env: ENVIRONMENTS[s.env ?? d.env] ? (s.env ?? d.env) : 'country',
+    level: LEVELS[s.level ?? d.level] ? +(s.level ?? d.level) : 0, // city: 0 = detached house, else floor
+
     nodes: s.nodes.filter(n => isFinite(n.x) && isFinite(n.z)).map(n => ({ id: String(n.id), x: +n.x, z: +n.z })),
     walls: [],
     rooms: (s.rooms || []).map(m => ({ ...Plan.newMeta(), ...m, type: Plan.ROOM_TYPES[m.type] ? m.type : 'other', floor: FLOORS[m.floor] ? m.floor : 'parquet' })),
@@ -285,7 +287,8 @@ function setView(v) {
 }
 
 function updateEnv() {
-  environment.apply(state.env, bounds(), camera === ortho);
+  environment.apply(state.env, bounds(), camera === ortho, { level: state.level, walking, wallH: state.wallH / 100 });
+  $('#levelMode').hidden = state.env !== 'city';
 }
 
 function updateSun() {
@@ -666,6 +669,7 @@ function enterWalk() {
   sun.castShadow = true;
   ceilingsG.visible = true;
   indoorLight.visible = true;
+  updateEnv(); // apartments: the floors above appear
   rebuildWalls();
   rebuildItems();
   updateOverlay();
@@ -678,6 +682,7 @@ function exitWalk() {
   document.body.classList.remove('walking');
   ceilingsG.visible = false;
   indoorLight.visible = false;
+  updateEnv();
   rebuildWalls();
   rebuildItems();
   updateOverlay();
@@ -717,6 +722,7 @@ function rebuildAll() {
   renderList();
   $('#projectName').value = state.name;
   $('#envMode').value = state.env;
+  $('#levelMode').value = String(state.level);
 }
 
 // ---------- collisions + overlay ----------
@@ -1970,6 +1976,13 @@ $('#envMode').addEventListener('change', e => {
   state.env = e.target.value;
   updateEnv();
   commit();
+});
+$('#levelMode').innerHTML = Object.entries(LEVELS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+$('#levelMode').addEventListener('change', e => {
+  state.level = +e.target.value;
+  updateEnv();
+  commit();
+  if (state.level) toast('Sei in un appartamento: cammina fino alla finestra o sul balcone per vedere la città dall’alto.');
 });
 $('#styleBar').addEventListener('click', e => {
   const b = e.target.closest('[data-style]');

@@ -378,7 +378,7 @@ label.wz-row { cursor: pointer; }
   .status { top: 8px; font-size: 12px; }
   #newBtn { padding: 6px 8px; }
   .tools button { min-width: 0; padding: 7px 8px; }
-  #envMode, #wallMode { max-width: 92px; padding: 6px 4px; }
+  #envMode, #wallMode, #levelMode { max-width: 92px; padding: 6px 4px; }
   .tools button span { display: none; }
   .draw-hint { bottom: 12px; max-width: calc(100% - 80px); left: calc(50% + 28px); }
   .wz-body { grid-template-columns: 1fr; }

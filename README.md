@@ -23,7 +23,8 @@ senza build: HTML, CSS e JavaScript modules.
 - **Finiture e stili**: legni (rovere, frassino, ciliegio, noce, wengé) e 18 colori; stili con un clic
   (Legno naturale, Minimal, Scandinavo, Classico, Industriale, Colorato) che ricolorano tutti i mobili.
 - **Ringhiere**: vetro, sbarre, legno o muretto. In cucina anche pensile con cappa e cappa a camino.
-- **Fuori casa**: campagna (prato, alberi, colline), città (strada, palazzi) o neutro.
+- **Fuori casa**: campagna (prato, alberi, colline), città (strada, palazzi) o neutro. In città la casa
+  può essere indipendente o un appartamento al 1°, 3°, 6° o 10° piano di un palazzo.
 - **Controlli**: sovrapposizioni e mobili fuori dai muri vengono segnalati in rosso.
 - **Viste**: 3D con muri che si nascondono verso la camera, pianta 2D dall'alto, muri alti/bassi.
 - **Cammina**: visita in prima persona con soffitti e porte aperte; mouse + `WASD`/frecce (`Shift` per
