@@ -476,7 +476,8 @@ function mulberry(a) {
 Object.assign(B, decorBuilders({ box, cyl, mat, shade, mulberry, def: it => TYPES[it.type], DARK, WHITE, METAL, GLASS }));
 
 // Defaults in cm. `elev` = height from the floor; `opening` = cut into a wall.
-// `wallMount` = hangs on a wall (turns its back to it); `ceiling` = hangs from the ceiling;
+// `wallMount` = hangs on a wall (turns its back to it); with `railMount` it hangs on a railing instead,
+// its rim (40% of its height) level with the rail top; `ceiling` = hangs from the ceiling;
 // `surface` = has a top to put things on (true: at its height, or a number in cm);
 // `onTop` = small piece that lands on the furniture under it;
 // `cutByOpenings` = wall covering with holes for doors and windows; `overOpenings` = goes over a window (curtains);
@@ -725,6 +726,9 @@ export const CATALOG = [
     { type: 'cypress', name: 'Cipresso', build: 'cypress', w: 90, d: 90, h: 450, color: '#6e5a46', outdoor: true, hit: 0.3 },
     { type: 'bush', name: 'Cespuglio', build: 'bush', w: 90, d: 90, h: 80, color: '#4f7f3f', outdoor: true },
     { type: 'lavender', name: 'Lavanda in fioriera', build: 'lavender', w: 100, d: 40, h: 60, color: '#b5674a', outdoor: true },
+    { type: 'wallPlanter', name: 'Fioriera da muro', build: 'wallPlanter', w: 45, d: 20, h: 45, elev: 110, color: '#b5674a', wallMount: true, outdoor: true },
+    { type: 'railPlanter', name: 'Fioriera da ringhiera', build: 'railPlanter', w: 60, d: 22, h: 45, elev: 60, color: '#b5674a', wallMount: true, railMount: true, outdoor: true },
+    { type: 'outdoorWallLamp', name: 'Applique da esterno', build: 'outdoorWallLamp', w: 18, d: 22, h: 32, elev: 190, color: '#2b2b2b', wallMount: true, outdoor: true },
     { type: 'flowerBed', name: 'Aiuola fiorita', build: 'flowerBed', w: 200, d: 70, h: 30, color: '#b5674a', outdoor: true },
     { type: 'raisedBed', name: 'Orto rialzato', build: 'raisedBed', w: 120, d: 80, h: 45, color: 'wood:oak', outdoor: true },
     { type: 'gardenTable', name: 'Tavolo da giardino', build: 'table', w: 160, d: 90, h: 75, color: '#5b5f63', outdoor: true, openBelow: true, surface: true },

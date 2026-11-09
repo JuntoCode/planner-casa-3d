@@ -71,6 +71,26 @@ export function decorBuilders({ box, cyl, mat, shade, mulberry, def, DARK, WHITE
     cyl(g, w * 0.46, w * 0.46, 0.01, '#4a3a2c', 0, h - 0.012, 0);
   };
   const GREEN = ['#3d6b34', '#4f7f3f', '#5f8f4a', '#2f5a2c'];
+  // Geraniums and petunias in a trough whose soil is at height y: a flowering mound,
+  // and stems falling over the front edge by up to `drop`.
+  function troughFlowers(g, r, w, d, y, zc, drop) {
+    const cols = ['#d6304a', '#e8789a', '#f4f3ef', '#c2185b', '#f2a65a'];
+    const pick = () => cols[Math.floor(r() * cols.length)];
+    const n = Math.max(4, Math.round(w * 14));
+    for (let k = 0; k < n; k++) {
+      const x = (r() - 0.5) * (w - 0.06), z = zc + (r() - 0.5) * (d - 0.06);
+      blob(g, 0.045 + r() * 0.02, GREEN[k % 4], x, y + 0.03, z);
+      ball(g, 0.018 + r() * 0.01, pick(), x + (r() - 0.5) * 0.04, y + 0.07 + r() * 0.04, z, { roughness: 0.9 });
+    }
+    const zf = zc + d / 2;
+    for (let k = 0; k < Math.round(n * 0.7); k++) {
+      const x = (r() - 0.5) * (w - 0.04), len = drop * (0.5 + r() * 0.5);
+      const pts = [[x, y + 0.02, zf - 0.01], [x + (r() - 0.5) * 0.03, y - len * 0.4, zf + 0.025], [x + (r() - 0.5) * 0.05, y - len, zf + 0.015]];
+      tube(g, pts, 0.003, '#4f7f3f');
+      blob(g, 0.022, GREEN[k % 4], ...pts[1]);
+      ball(g, 0.016, pick(), ...pts[2], { roughness: 0.9 });
+    }
+  }
 
   return {
     // ---------- wall art ----------
@@ -1407,6 +1427,39 @@ export function decorBuilders({ box, cyl, mat, shade, mulberry, def, DARK, WHITE
     bush(g, w, d, h, c, it) {
       const r = mulberry(seedOf(it));
       for (let k = 0; k < 6; k++) blob(g, Math.min(w, d) * (0.25 + r() * 0.1), k % 2 ? c : shade(c, -0.06), (r() - 0.5) * w * 0.45, h * (0.3 + r() * 0.35), (r() - 0.5) * d * 0.45);
+    },
+    // ---------- outside walls and railings ----------
+    // Outdoor wall light: a lantern with glowing glass on a short bracket.
+    outdoorWallLamp(g, w, d, h, c) {
+      const back = -d / 2, s = Math.min(w, d * 0.55), zc = back + d * 0.62, y0 = h * 0.12, gh = h * 0.5;
+      box(g, w * 0.45, h * 0.45, 0.012, c, 0, h * 0.2, back + 0.006, METAL);
+      box(g, 0.016, 0.016, d * 0.45, c, 0, h * 0.62, back + d * 0.225, METAL);
+      box(g, s, 0.015, s, c, 0, y0, zc, METAL);
+      box(g, s * 0.82, gh, s * 0.82, '#fff3d6', 0, y0 + 0.015, zc, { emissive: '#ffe6b0', emissiveIntensity: 1.6 });
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, 0.008, gh, 0.008, c, sx * s * 0.43, y0 + 0.015, zc + sz * s * 0.43, METAL);
+      add(g, new THREE.ConeGeometry(s * 0.75, h * 0.2, 4), mat(c, METAL), 0, y0 + 0.015 + gh + h * 0.1, zc).rotation.y = Math.PI / 4;
+    },
+    // Wall planter: a trough on a plate, flowers on top and stems falling down the wall.
+    wallPlanter(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      const y0 = h * 0.4, th = h * 0.28, back = -d / 2, zc = back + 0.012 + (d - 0.012) / 2;
+      box(g, w * 0.9, h * 0.5, 0.012, shade(c, -0.08), 0, h * 0.3, back + 0.006);
+      box(g, w, th, d - 0.012, c, 0, y0, zc);
+      box(g, w - 0.03, 0.01, d - 0.04, '#4a3a2c', 0, y0 + th - 0.012, zc);
+      troughFlowers(g, r, w, d - 0.012, y0 + th, zc, y0 + th - 0.03);
+    },
+    // Railing planter: hooked over the top rail with its back on the railing.
+    // The rim is at 40% of the height: main.js hangs it with the rim level with the rail top.
+    railPlanter(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      const th = h * 0.4, back = -d / 2, zc = back + 0.005 + (d - 0.01) / 2;
+      box(g, w, th, d - 0.01, c, 0, 0, zc);
+      box(g, w - 0.03, 0.01, d - 0.04, '#4a3a2c', 0, th - 0.012, zc);
+      for (const sx of [-1, 1]) {
+        const x = sx * w * 0.3;
+        tube(g, [[x, th * 0.5, back + 0.004], [x, th + 0.035, back + 0.002], [x, th + 0.04, back - 0.035], [x, th, back - 0.065]], 0.005, '#3b3f45', METAL);
+      }
+      troughFlowers(g, r, w, d - 0.01, th, zc, th * 0.9);
     },
     lavender(g, w, d, h, c, it) {
       const r = mulberry(seedOf(it));

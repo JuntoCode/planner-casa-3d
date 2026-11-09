@@ -58,6 +58,8 @@ senza build: HTML, CSS e JavaScript modules.
   alla casa, *Patio* un cordolo per una zona pavimentata. In giardino: alberi, ulivo, cipresso,
   cespugli, aiuole, lavanda, orto, piscina, pergola, ombrellone, lettino, barbecue, panchina,
   lampione, casetta degli attrezzi, cuccia del cane, amaca, altalena, tappeto elastico, braciere, fontana, auto.
+  Sui muri esterni applique da esterno e fioriere da muro; la **fioriera da ringhiera** si aggancia da sola
+  alla ringhiera più vicina, con il bordo all'altezza del corrimano.
 - **Piani**: casa su più livelli. Dal menu in alto o dalla scheda *Pianta* scegli il piano da modificare,
   ne aggiungi uno sopra (vuoto o con gli stessi muri e finestre di quello sotto), lo rinomini o lo elimini.
   In 3D vedi i piani sotto quello che modifichi, con il solaio; in pianta il piano sotto resta velato come
@@ -76,7 +78,8 @@ senza build: HTML, CSS e JavaScript modules.
 - **Controlli**: sovrapposizioni e mobili fuori dai muri vengono segnalati in rosso.
 - **Viste**: 3D con muri che si nascondono verso la camera, pianta 2D dall'alto, muri alti/bassi.
 - **Cammina**: visita in prima persona con i soffitti; mouse + `WASD`/frecce (`Shift` per
-  correre), su telefono trascina a sinistra per camminare e a destra per guardarti intorno.
+  correre), su telefono un joystick a sinistra per camminare (va sotto il dito) e un cerchio *Guarda*
+  a destra per guardarti intorno.
   Porte e finestre partono chiuse: guardale e premi `E` (o clic, o tocca) per aprirle e chiuderle.
   Le porte girano sui cardini, le finestre aprono le ante verso l'interno, il vasistas si inclina
   e la vetrata scorre. Muri, mobili e porte chiuse non si attraversano.

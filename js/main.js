@@ -963,6 +963,7 @@ const walker = createWalker({
   canvas, camera: walkCam, colliders: walkColliders, onExit: () => setView('3d'), onUse: useAt,
   baseY: () => floorElev(state.floor) / 100,
   onFloor: step => switchFloor(state.floor + step),
+  stick: $('#walkStick'), lookPad: $('#walkLook'),
 });
 
 function enterWalk() {
@@ -1641,20 +1642,22 @@ const ridersOf = o => {
 // Hang a wall piece (painting, shelf, TV…) on the closest straight wall within `maxDist`:
 // back against the wall face on the side of (x, z). Returns false if no wall is close.
 // Straight solid walls near (x, z), closest first, with the face looking at the point.
-function wallFaces(x, z, maxDist, minLen) {
+function wallFaces(x, z, maxDist, minLen, kind = 'wall') {
   const nm = Plan.nodeMap(state);
   const out = [];
   for (const w of state.walls) {
-    if (w.type !== 'wall' || Plan.isCurved(w)) continue;
+    if (w.type !== kind || Plan.isCurved(w)) continue;
     const [A, B] = Plan.wallEnds(state, w, nm);
     const r = G.segDist([x, z], A, B), len = G.dist(A, B);
     if (r.d > maxDist || len < minLen) continue;
     const d = G.norm(G.sub(B, A)), n = G.left(d);
     const side = Math.sign(G.dot(G.sub([x, z], A), n)) || 1;
-    out.push({ dist: r.d, A, d, len, n: G.mul(n, side), u0: G.dot(G.sub([x, z], A), d), t: Plan.wallThickness(state, w) / 2 });
+    out.push({ dist: r.d, A, d, len, n: G.mul(n, side), u0: G.dot(G.sub([x, z], A), d), t: Plan.wallThickness(state, w) / 2, top: Plan.wallHeight(state, w) });
   }
   return out.sort((a, b) => a.dist - b.dist);
 }
+// Railing planters hang on railings, every other wall piece on walls.
+const facesFor = (it, x, z, maxDist) => wallFaces(x, z, maxDist, it.w, TYPES[it.type].railMount ? 'railing' : 'wall');
 
 // Put a wall piece `u` cm along a wall face, its back on the wall and its front (+z) facing out.
 function hangOn(it, f, u) {
@@ -1663,10 +1666,11 @@ function hangOn(it, f, u) {
   it.x = Math.round(p[0] * 10) / 10;
   it.z = Math.round(p[1] * 10) / 10;
   it.rot = ((Math.round(THREE.MathUtils.radToDeg(Math.atan2(f.n[0], f.n[1]))) % 360) + 360) % 360;
+  if (TYPES[it.type].railMount) it.elev = Math.max(0, Math.round(f.top - it.h * 0.4));
 }
 
 function mountOnWall(it, x, z, maxDist) {
-  const f = wallFaces(x, z, maxDist, it.w)[0];
+  const f = facesFor(it, x, z, maxDist)[0];
   if (!f) return false;
   hangOn(it, f, f.u0);
   return true;
@@ -1692,7 +1696,7 @@ const overWallPiece = it => state.items.some(o => o.id !== it.id && TYPES[o.type
 // A new wall piece: the closest wall stretch where it hangs free (not over the shower, say).
 function hangOnFreeWall(it, p) {
   const segs = solidSegments(), room = roomAt(p);
-  for (const f of wallFaces(p.x, p.z, Infinity, it.w)) {
+  for (const f of facesFor(it, p.x, p.z, Infinity)) {
     for (let k = 0; k <= f.len; k += 10) {
       for (const u of k ? [f.u0 + k, f.u0 - k] : [f.u0]) {
         if (u < it.w / 2 - 5 || u > f.len - it.w / 2 + 5) continue;

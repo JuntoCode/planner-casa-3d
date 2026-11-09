@@ -234,6 +234,7 @@ body.walk-locked #scene { cursor: none; }
 }
 .use-hint kbd { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.3); color: #fff; margin-right: 4px; }
 .walk-hint .touch, .use-hint .touch { display: none; }
+.walk-stick, .walk-look { display: none; }
 @media (pointer: coarse) {
   .walk-hint .desk, .use-hint .desk { display: none; }
   .walk-hint .touch, .use-hint .touch { display: inline; }
@@ -510,6 +511,33 @@ label.wz-row { cursor: pointer; }
   .edge-label input { font-size: 16px !important; width: 52px; min-height: 0; }
   .edge-label button { width: 28px; height: 28px; min-height: 0; }
   .x { min-width: 40px; }
+
+  /* walking: a joystick on the left, a look pad on the right, the hint and "Esci" on top */
+  .walk-hint { top: 10px; bottom: auto; left: 12px; right: 12px; transform: none; max-width: none; width: fit-content; margin: 0 auto; }
+  .walk-stick, .walk-look {
+    display: block; position: absolute; z-index: 3; pointer-events: none; border-radius: 50%;
+    bottom: calc(40px + env(safe-area-inset-bottom)); transition: opacity .2s;
+  }
+  .walk-stick {
+    left: 28px; width: 120px; height: 120px; opacity: .75;
+    background: rgba(29, 36, 48, .3); border: 2px solid rgba(255, 255, 255, .75); box-shadow: 0 2px 12px rgba(0, 0, 0, .25);
+  }
+  .walk-stick i {
+    position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%;
+    background: rgba(255, 255, 255, .95); box-shadow: 0 2px 6px rgba(0, 0, 0, .35);
+  }
+  .walk-stick.on { opacity: 1; transition: none; }
+  .walk-look {
+    right: 28px; width: 96px; height: 96px; margin-bottom: 12px; opacity: .75;
+    background: rgba(29, 36, 48, .3); border: 2px dashed rgba(255, 255, 255, .8); display: grid; place-items: center;
+  }
+  .walk-look i { font-style: normal; font-size: 34px; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .6); }
+  .walk-look.on { opacity: .25; }
+  .walk-stick b, .walk-look b {
+    position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px;
+    font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); white-space: nowrap;
+  }
+  .walk-stick.on b { display: none; }
 }
 
 /* floors */

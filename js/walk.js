@@ -1,6 +1,6 @@
 import * as G from './geometry.js';
 
-// First-person walk: mouse/touch to look, WASD/arrows (or the left half of a
+// First-person walk: mouse/touch to look, WASD/arrows (or the joystick on the left half of a
 // touch screen) to move. Walls and furniture stop you; open doors let you through.
 // E / F, a click (once the mouse is captured) or a tap calls onUse to open or close what you look at.
 // Positions are in cm on the floor plan; the camera works in meters.
@@ -11,14 +11,16 @@ const SPEED = 140;      // cm/s walking
 const RUN = 300;        // cm/s with Shift
 const TURN = 1.8;       // rad/s with the left/right arrows
 const LOOK = 0.0024;    // rad per pixel of mouse movement
+const STICK_R = 60;     // px the joystick knob travels for full speed (half the ring drawn in CSS)
 
-export function createWalker({ canvas, camera, colliders, onExit, onUse, baseY = () => 0, onFloor }) {
+export function createWalker({ canvas, camera, colliders, onExit, onUse, baseY = () => 0, onFloor, stick, lookPad }) {
   let active = false;
   let pos = [0, 0];
   let yaw = 0, pitch = 0;
   let solid = { segs: [], boxes: [] };
   const keys = new Set();
   const touches = new Map(); // pointerId -> { kind: 'move' | 'look', x0, y0, x, y }
+  let stickId = null;        // the finger shown on the joystick
   let mouseLook = false;
   let lockFailed = false; // no pointer lock (e.g. inside a frame): plain clicks use things
   let down = null;        // where a click or tap started, to tell it from a drag
@@ -70,9 +72,9 @@ export function createWalker({ canvas, camera, colliders, onExit, onUse, baseY =
     if (keys.has('ArrowRight')) yaw -= TURN * dt;
     for (const t of touches.values()) {
       if (t.kind !== 'move') continue;
-      const mx = (t.x - t.x0) / 60, mz = (t.y - t.y0) / 60;
-      s += Math.max(-1, Math.min(1, mx));
-      f -= Math.max(-1, Math.min(1, mz));
+      const [mx, mz] = stickOffset(t);
+      s += mx / STICK_R;
+      f -= mz / STICK_R;
     }
     const len = Math.hypot(f, s);
     if (len > 0.05) {
@@ -89,6 +91,29 @@ export function createWalker({ canvas, camera, colliders, onExit, onUse, baseY =
     apply();
   }
 
+  // The finger's offset from where it touched down, kept inside the joystick ring.
+  function stickOffset(t) {
+    const dx = t.x - t.x0, dy = t.y - t.y0, k = Math.min(1, STICK_R / (Math.hypot(dx, dy) || 1));
+    return [dx * k, dy * k];
+  }
+  // On-screen joystick: it jumps under the finger that walks and its knob follows it;
+  // back to its corner on release. The look pad dims while a finger looks around.
+  function showStick() {
+    const t = stickId != null && touches.get(stickId);
+    if (stick) {
+      stick.classList.toggle('on', !!t);
+      const knob = stick.firstElementChild;
+      if (t) {
+        const r = stick.offsetParent.getBoundingClientRect(), [dx, dy] = stickOffset(t);
+        Object.assign(stick.style, { left: `${t.x0 - r.left - STICK_R}px`, top: `${t.y0 - r.top - STICK_R}px`, bottom: 'auto' });
+        knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      } else {
+        stick.style.left = stick.style.top = stick.style.bottom = knob.style.transform = '';
+      }
+    }
+    lookPad?.classList.toggle('on', [...touches.values()].some(q => q.kind === 'look'));
+  }
+
   function look(dx, dy) {
     yaw -= dx * LOOK;
     pitch = Math.max(-1.35, Math.min(1.35, pitch - dy * LOOK));
@@ -103,7 +128,7 @@ export function createWalker({ canvas, camera, colliders, onExit, onUse, baseY =
     if (MOVE_KEYS.includes(e.code)) { keys.add(e.code); e.preventDefault(); }
   }
   function onKeyUp(e) { keys.delete(e.code); }
-  function onBlur() { keys.clear(); touches.clear(); }
+  function onBlur() { keys.clear(); touches.clear(); showStick(); }
 
   function onPointerDown(e) {
     if (!active) return;
@@ -114,7 +139,9 @@ export function createWalker({ canvas, camera, colliders, onExit, onUse, baseY =
       const r = canvas.getBoundingClientRect();
       const kind = e.clientX - r.left < r.width / 2 ? 'move' : 'look';
       touches.set(e.pointerId, { kind, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY });
+      if (kind === 'move' && !touches.has(stickId)) stickId = e.pointerId;
       try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      showStick();
       return;
     }
     // Mouse: lock the pointer for free look; dragging also works if locking is blocked.
@@ -128,6 +155,7 @@ export function createWalker({ canvas, camera, colliders, onExit, onUse, baseY =
     if (t) {
       if (t.kind === 'look') look((e.clientX - t.x) * 1.6, (e.clientY - t.y) * 1.6);
       t.x = e.clientX; t.y = e.clientY;
+      if (e.pointerId === stickId) showStick();
       return;
     }
     if (document.pointerLockElement === canvas || (mouseLook && e.buttons)) look(e.movementX, e.movementY);
@@ -137,7 +165,7 @@ export function createWalker({ canvas, camera, colliders, onExit, onUse, baseY =
     const tap = down && performance.now() - down.t < 350 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 12;
     if (active && tap && (e.pointerType === 'touch' || (lockFailed && !document.pointerLockElement))) onUse?.(e.clientX, e.clientY);
     down = null;
-    touches.delete(e.pointerId);
+    if (touches.delete(e.pointerId)) showStick();
     if (e.pointerType !== 'touch') mouseLook = false;
   }
 
@@ -169,6 +197,7 @@ export function createWalker({ canvas, camera, colliders, onExit, onUse, baseY =
       active = false;
       keys.clear();
       touches.clear();
+      showStick();
       if (document.pointerLockElement === canvas) document.exitPointerLock();
     },
     update,
