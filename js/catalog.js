@@ -479,6 +479,7 @@ Object.assign(B, decorBuilders({ box, cyl, mat, shade, mulberry, def: it => TYPE
 // `wallMount` = hangs on a wall (turns its back to it); `ceiling` = hangs from the ceiling;
 // `surface` = has a top to put things on (true: at its height, or a number in cm);
 // `onTop` = small piece that lands on the furniture under it;
+// `cutByOpenings` = wall covering with holes for doors and windows; `overOpenings` = goes over a window (curtains);
 // `outdoor` = may stand outside the rooms; `hit` = share of the footprint that blocks
 // walking (trunks, poles) or 'posts' (only the four corners).
 export const CATALOG = [
@@ -500,9 +501,9 @@ export const CATALOG = [
     { type: 'pouf', name: 'Pouf', build: 'pouf', w: 50, d: 50, h: 42, color: '#d9b44a' },
     { type: 'beanBag', name: 'Poltrona sacco', build: 'beanBag', w: 85, d: 85, h: 75, color: '#56704f' },
     { type: 'fireplace', name: 'Camino', build: 'fireplace', w: 140, d: 40, h: 110, color: '#efebe4', surface: true },
-    { type: 'curtains', name: 'Tende', build: 'curtains', w: 180, d: 15, h: 250, elev: 10, color: '#e9e1d3', wallMount: true, noCollide: true },
+    { type: 'curtains', name: 'Tende', build: 'curtains', w: 180, d: 15, h: 250, elev: 10, color: '#e9e1d3', wallMount: true, noCollide: true, overOpenings: true },
     { type: 'radiator', name: 'Termosifone', build: 'radiator', w: 80, d: 10, h: 60, elev: 12, color: '#ffffff', wallMount: true },
-    { type: 'blind', name: 'Veneziana', build: 'blind', w: 120, d: 6, h: 140, elev: 85, color: '#f4f3ef', wallMount: true, noCollide: true },
+    { type: 'blind', name: 'Veneziana', build: 'blind', w: 120, d: 6, h: 140, elev: 85, color: '#f4f3ef', wallMount: true, noCollide: true, overOpenings: true },
   ] },
   { cat: 'Bambini', items: [
     { type: 'bunkBed', name: 'Letto a castello', build: 'bunkBed', w: 100, d: 205, h: 165, color: 'wood:ash' },
@@ -578,7 +579,7 @@ export const CATALOG = [
     { type: 'hoodCabinet', name: 'Pensile con cappa', build: 'hoodCabinet', w: 60, d: 35, h: 70, elev: 145, color: '#e9e6df' },
     { type: 'chimneyHood', name: 'Cappa a camino', build: 'chimneyHood', w: 90, d: 50, h: 100, elev: 150, color: '#c0c4c6' },
     { type: 'fridge', name: 'Frigorifero', build: 'fridge', w: 60, d: 65, h: 185, color: '#e6e8ea' },
-    { type: 'backsplash', name: 'Paraschizzi piastrelle', build: 'tilePanel', art: 'subway', w: 180, d: 1, h: 60, elev: 90, color: '#ffffff', wallMount: true, noCollide: true },
+    { type: 'backsplash', name: 'Paraschizzi piastrelle', build: 'tilePanel', art: 'subway', w: 180, d: 1, h: 60, elev: 90, color: '#ffffff', wallMount: true, noCollide: true, cutByOpenings: true },
     { type: 'kitchenIsland', name: 'Isola cucina', build: 'kitchenIsland', w: 200, d: 100, h: 92, color: '#e9e6df', surface: true, openBelow: true },
     { type: 'barStool', name: 'Sgabello', build: 'barStool', w: 40, d: 40, h: 75, color: 'wood:oak', tucks: true },
     { type: 'dishwasher', name: 'Lavastoviglie', build: 'dishwasher', w: 60, d: 62, h: 90, color: '#e6e8ea', surface: true },
@@ -602,9 +603,9 @@ export const CATALOG = [
     { type: 'shower', name: 'Doccia', build: 'shower', w: 90, d: 90, h: 200, color: '#dfefff' },
     { type: 'bathtub', name: 'Vasca', build: 'bathtub', w: 170, d: 75, h: 55, color: '#ffffff' },
     { type: 'washer', name: 'Lavatrice', build: 'washer', w: 60, d: 60, h: 85, color: '#f2f3f4', surface: true },
-    { type: 'tilesSubway', name: 'Rivestimento piastrelle', build: 'tilePanel', art: 'subway', w: 120, d: 1, h: 200, color: '#ffffff', wallMount: true, noCollide: true },
-    { type: 'tilesMosaic', name: 'Rivestimento mosaico', build: 'tilePanel', art: 'wallMosaic', w: 120, d: 1, h: 200, color: '#ffffff', wallMount: true, noCollide: true },
-    { type: 'tilesHex', name: 'Rivestimento esagonale', build: 'tilePanel', art: 'wallHex', w: 120, d: 1, h: 120, color: '#ffffff', wallMount: true, noCollide: true },
+    { type: 'tilesSubway', name: 'Rivestimento piastrelle', build: 'tilePanel', art: 'subway', w: 120, d: 1, h: 200, color: '#ffffff', wallMount: true, noCollide: true, cutByOpenings: true },
+    { type: 'tilesMosaic', name: 'Rivestimento mosaico', build: 'tilePanel', art: 'wallMosaic', w: 120, d: 1, h: 200, color: '#ffffff', wallMount: true, noCollide: true, cutByOpenings: true },
+    { type: 'tilesHex', name: 'Rivestimento esagonale', build: 'tilePanel', art: 'wallHex', w: 120, d: 1, h: 120, color: '#ffffff', wallMount: true, noCollide: true, cutByOpenings: true },
     { type: 'mirrorCabinet', name: 'Pensile a specchio', build: 'mirrorCabinet', w: 70, d: 15, h: 65, elev: 125, color: '#ffffff', wallMount: true },
     { type: 'towelRail', name: 'Portasciugamani', build: 'towelRail', w: 60, d: 10, h: 35, elev: 95, color: '#9fb8c8', wallMount: true, noCollide: true },
     { type: 'towelRadiator', name: 'Scaldasalviette', build: 'towelRadiator', w: 50, d: 10, h: 120, elev: 20, color: '#f4f3ef', wallMount: true },

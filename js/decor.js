@@ -1536,13 +1536,25 @@ export function decorBuilders({ box, cyl, mat, shade, mulberry, def, DARK, WHITE
       for (let x = -w / 2; x <= w / 2 + 0.01; x += 0.35) box(g, 0.05, 0.14, d + 0.3, c, x, h - 0.06, 0);
     },
     // Wall tiles: a thin tiled panel, the pattern keeps its real size.
+    // Doors and windows behind it (it.cutouts, set by main.js) stay uncovered: the panel is
+    // made of the pieces around them.
     tilePanel(g, w, d, h, c, it) {
-      const tex = artTexture(def(it).art || 'subway').clone();
-      tex.repeat.set(w / 0.6, h / 0.6);
-      tex.needsUpdate = true;
-      const m = new THREE.MeshStandardMaterial({ map: tex, color: c, roughness: 0.25 });
-      const o = add(g, new THREE.BoxGeometry(w, h, d), [mat(c), mat(c), mat(c), mat(c), m, mat(c)], 0, h / 2, 0);
-      o.castShadow = false;
+      const m = texMat(artTexture(def(it).art || 'subway'), { roughness: 0.25 }, c);
+      const cuts = (it.cutouts || []).map(([x0, y0, x1, y1]) => [Math.max(-w / 2, x0), Math.max(0, y0), Math.min(w / 2, x1), Math.min(h, y1)]);
+      const xs = [...new Set([-w / 2, w / 2, ...cuts.flatMap(q => [q[0], q[2]])])].sort((a, b) => a - b);
+      const ys = [...new Set([0, h, ...cuts.flatMap(q => [q[1], q[3]])])].sort((a, b) => a - b);
+      for (let i = 0; i < xs.length - 1; i++) for (let j = 0; j < ys.length - 1; j++) {
+        const x0 = xs[i], x1 = xs[i + 1], y0 = ys[j], y1 = ys[j + 1];
+        if (x1 - x0 < 0.002 || y1 - y0 < 0.002) continue;
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        if (cuts.some(q => cx > q[0] && cx < q[2] && cy > q[1] && cy < q[3])) continue;
+        box(g, x1 - x0, y1 - y0, d, c, cx, y0, 0).castShadow = false;
+        // Tiles keep their real size (60 cm per picture) and line up across the pieces.
+        const geo = new THREE.PlaneGeometry(x1 - x0, y1 - y0);
+        const uv = geo.attributes.uv, pos = geo.attributes.position;
+        for (let k = 0; k < uv.count; k++) uv.setXY(k, (cx + pos.getX(k)) / 0.6, (cy + pos.getY(k)) / 0.6);
+        add(g, geo, m, cx, cy, d / 2 + 0.001).castShadow = false;
+      }
     },
     patternRug(g, w, d, h, c, it) {
       const m = box(g, w, Math.max(h, 0.008), d, c, 0, 0, 0, { roughness: 1 });

@@ -709,7 +709,8 @@ function makeItemObj(it) {
     const w = getWall(it.wall);
     it.d = w ? Plan.wallThickness(state, w) : state.wallT;
   }
-  const o = buildModel(it);
+  // Wall coverings (tiles) leave the doors and windows behind them uncovered.
+  const o = buildModel(TYPES[it.type].cutByOpenings ? { ...it, cutouts: openingsBehind(it) } : it);
   placeObj(o, it);
   o.userData = { kind: 'item', id: it.id };
   if (lowWalls() && isOpening(it)) o.traverse(c => { if (c.userData.tall) c.visible = false; });
@@ -738,8 +739,78 @@ function refreshItem(it) {
   const o = makeItemObj(it);
   itemsG.add(o);
   itemObjs.set(it.id, o);
-  if (isOpening(it)) rebuildWalls();
+  if (isOpening(it)) { rebuildWalls(); refreshCoverings(); }
   updateOverlay();
+}
+
+// Rebuild the wall coverings, after a door or window moved or changed.
+function refreshCoverings() {
+  for (const it of state.items) {
+    if (!TYPES[it.type].cutByOpenings) continue;
+    const old = itemObjs.get(it.id);
+    if (old) { old.traverse(c => c.geometry?.dispose()); itemsG.remove(old); }
+    const o = makeItemObj(it);
+    itemsG.add(o);
+    itemObjs.set(it.id, o);
+  }
+}
+
+// Doors and windows on the wall behind a wall piece, as rectangles in the piece's own frame
+// (meters: x across its width from the centre, y up from its bottom).
+function openingsBehind(it) {
+  const r = THREE.MathUtils.degToRad(it.rot), ax = [Math.cos(r), -Math.sin(r)], az = [Math.sin(r), Math.cos(r)];
+  const out = [];
+  for (const op of state.items) {
+    if (!isOpening(op)) continue;
+    const w = getWall(op.wall);
+    if (!w) continue;
+    const opr = THREE.MathUtils.degToRad(op.rot);
+    if (Math.abs(G.dot([Math.cos(opr), -Math.sin(opr)], ax)) < 0.99) continue; // not the same wall direction
+    const rel = [op.x - it.x, op.z - it.z];
+    if (Math.abs(G.dot(rel, az)) > Plan.wallThickness(state, w) / 2 + it.d + 3) continue; // not right behind it
+    const lx = G.dot(rel, ax);
+    const x0 = Math.max(-it.w / 2, lx - op.w / 2), x1 = Math.min(it.w / 2, lx + op.w / 2);
+    const y0 = Math.max(0, op.elev - it.elev), y1 = Math.min(it.h, op.elev + op.h - it.elev);
+    if (x1 - x0 > 1 && y1 - y0 > 1) out.push([x0 / 100, y0 / 100, x1 / 100, y1 / 100]);
+  }
+  return out;
+}
+
+// A painting, TV or shelf hanging over a window or a door: the opening wins.
+const coversOpening = it => {
+  const t = TYPES[it.type];
+  return t.wallMount && !t.cutByOpenings && !t.overOpenings && openingsBehind(it).length > 0;
+};
+
+// Curtains and blinds go on the window closest to p, in the same room, sized to it.
+function hangOnWindow(it, p) {
+  const t = TYPES[it.type], room = roomAt(p);
+  let best = null;
+  for (const o of state.items) {
+    if (!isOpening(o) || isDoor(o)) continue;
+    const w = getWall(o.wall);
+    if (!w) continue;
+    const dir = planDir(o), n = G.left(dir), half = Plan.wallThickness(state, w) / 2;
+    for (const s of [1, -1]) {
+      const side = G.mul(n, s), probe = [o.x + side[0] * (half + 30), o.z + side[1] * (half + 30)];
+      if (room && roomAt({ x: probe[0], z: probe[1] }) !== room) continue;
+      // Curtains belong on real windows, not on a small high bathroom vasistas.
+      const dist = Math.hypot(o.x - p.x, o.z - p.z) + (it.type !== 'blind' && o.elev > 120 ? 1e5 : 0);
+      if (!best || dist < best.dist) best = { o, side, half, dist };
+    }
+  }
+  if (!best) return false;
+  const { o, side, half } = best;
+  if (it.type === 'blind') Object.assign(it, { w: o.w + 6, h: Math.max(30, o.h + 8), elev: Math.max(0, o.elev - 4) });
+  else {
+    it.w = Math.max(it.w, o.w + 70);
+    it.h = Math.min(it.h, state.wallH - it.elev - 5);
+  }
+  const c = [o.x + side[0] * (half + it.d / 2 + 0.2), o.z + side[1] * (half + it.d / 2 + 0.2)];
+  it.x = Math.round(c[0] * 10) / 10;
+  it.z = Math.round(c[1] * 10) / 10;
+  it.rot = ((Math.round(THREE.MathUtils.radToDeg(Math.atan2(side[0], side[1]))) % 360) + 360) % 360;
+  return true;
 }
 
 // After the walls changed: rooms, floors, walls, doors/windows, overlay.
@@ -952,6 +1023,7 @@ function rebuildGeometry() {
   const alive = new Set(state.items.map(i => i.id));
   for (const [id, o] of itemObjs) if (!alive.has(id)) { itemsG.remove(o); itemObjs.delete(id); }
   for (const it of state.items) if (isOpening(it)) refreshItemQuiet(it);
+  refreshCoverings();
   updateOverlay();
   walker.refresh();
 }
@@ -1189,6 +1261,7 @@ function findConflicts() {
     const ok = polys[i].every(p => (TYPES[list[i].type].outdoor || rooms.some(r => G.inRoom(p[0], p[1], r))) && segs.every(([a, b, h]) => G.segDist(p, a, b).d >= h - 0.6));
     if (!ok) bad.add(list[i].id);
   }
+  for (const it of state.items) if (coversOpening(it)) bad.add(it.id);
   return bad;
 }
 
@@ -1555,7 +1628,7 @@ function hangOnFreeWall(it, p) {
         if (u < it.w / 2 - 5 || u > f.len - it.w / 2 + 5) continue;
         hangOn(it, f, u);
         if (room && !G.inRoom(it.x, it.z, room)) continue;
-        if (!blocked(it, segs) && !overWallPiece(it)) return true;
+        if (!blocked(it, segs) && !overWallPiece(it) && !coversOpening(it)) return true;
       }
     }
   }
@@ -1721,11 +1794,16 @@ function dragItem(p, free) {
     Plan.syncOpenings(state);
     refreshItemQuiet(it);
     rebuildWalls();
+    refreshCoverings();
   } else {
     let x = p[0] + drag.off[0], z = p[1] + drag.off[1];
     if (!free) {
       x = snapTo(x, state.snap); z = snapTo(z, state.snap);
-      if (TYPES[it.type].wallMount && mountOnWall(it, x, z, 90)) { placeObj(itemObjs.get(it.id), it); updateOverlay(); return; }
+      if (TYPES[it.type].wallMount && mountOnWall(it, x, z, 90)) {
+        if (TYPES[it.type].cutByOpenings) refreshCoverings(); else placeObj(itemObjs.get(it.id), it);
+        updateOverlay();
+        return;
+      }
       [x, z] = snapToWalls(it, x, z);
     }
     it.x = x; it.z = z;
@@ -2018,7 +2096,8 @@ function addItem(type, at) {
   } else {
     it.x = snapTo(p.x, state.snap); it.z = snapTo(p.z, state.snap);
     let placed = false;
-    if (t.wallMount) placed = at ? mountOnWall(it, it.x, it.z, Infinity) : hangOnFreeWall(it, p);
+    if (t.overOpenings && !at) placed = hangOnWindow(it, p);
+    if (t.wallMount && !placed) placed = at ? mountOnWall(it, it.x, it.z, Infinity) : hangOnFreeWall(it, p);
     if (t.onTop) {
       const sup = supportUnder(it, it.x, it.z);
       if (sup) { it.elev = sup.top; placed = true; }
