@@ -18,14 +18,16 @@ senza build: HTML, CSS e JavaScript modules.
   un muro; scrivi le misure dei lati; dividi o elimina un muro.
 - **Porte e finestre** (anche portefinestre e vetrate scorrevoli): si agganciano ai muri e li tagliano;
   la porta mostra l'arco di apertura.
-- **Mobili e oggetti** (oltre 140): soggiorno, camera, cucina, bagno, ufficio, più
+- **Mobili e oggetti** (oltre 150): soggiorno, camera, cucina, bagno, ufficio, più
   - **soggiorno**: divano angolare, madia, parete attrezzata TV, vetrina, libreria a cubi, mensole sfalsate,
     pensile, tavolino laterale, pouf, poltrona sacco, camino, tende, termosifone;
   - **ingresso**: scarpiera, panca portascarpe, consolle, appendiabiti a muro e a stelo, portaombrelli;
   - **da appoggiare**: libri, candele, cornice, vaso, fruttiera, cassa audio, giradischi, microonde, macchina del caffè;
   - **decorazioni**: quadri, poster, arazzo mandala, specchi, orologio, mensola con libri, vaso di fiori;
   - **tappeti**: persiano, berbero, kilim, passatoia, rotondi;
-  - **luci**: lampadario, sospensioni, plafoniera, lampade da terra, ad arco, treppiede, da tavolo, luci fairy;
+  - **luci**: lampadario, sospensioni, plafoniera, luci fairy; da terra: classica, ad arco, treppiede, a luce
+    indiretta, a sfera, di carta, faro su treppiede, da lettura, a colonna; da tavolo: classica, verde da
+    scrivania, snodata, a fungo, a sfera, con paralume plissé, lanterna;
   - **piante**: monstera, sansevieria, palma, ficus, ulivo, felce, cactus, piante grasse, bonsai, pianta pendente;
   - **tecnologia e musica**: PC, portatile, TV a parete, chitarre a parete o su supporto, pianoforti, batteria;
   - **animali**: cucce per cane e gatto, ciotole, tiragraffi, lettiera, acquario;

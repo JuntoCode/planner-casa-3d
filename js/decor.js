@@ -238,6 +238,130 @@ export function decorBuilders({ box, cyl, mat, shade, mulberry, def, DARK, WHITE
       cyl(g, 0.02, 0.15, 0.08, c, 0, h - 0.08, 0, METAL);
     },
 
+    // ---------- more table lamps ----------
+    // Banker's lamp: brass base and a green glass shade lying across.
+    bankerLamp(g, w, d, h, c) {
+      box(g, w * 0.8, 0.025, d * 0.7, '#c9a24a', 0, 0, 0, METAL);
+      cyl(g, 0.008, 0.008, h * 0.7, '#c9a24a', 0, 0.025, -d * 0.15, METAL, 8);
+      const sh = add(g, new THREE.CylinderGeometry(d * 0.32, d * 0.32, w, 24, 1, true, 0, Math.PI), mat(c, { side: THREE.DoubleSide, roughness: 0.2, emissive: c, emissiveIntensity: 0.25 }), 0, h * 0.78, 0);
+      sh.rotation.z = Math.PI / 2;
+      ball(g, 0.025, '#fff3d6', 0, h * 0.74, 0, { emissive: '#ffe6b0', emissiveIntensity: 2 });
+    },
+    // Mushroom lamp: a glowing dome on a short stem.
+    mushroomLamp(g, w, d, h, c) {
+      cyl(g, w * 0.32, w * 0.35, 0.02, c, 0, 0, 0, { roughness: 0.3 });
+      cyl(g, w * 0.08, w * 0.12, h * 0.55, c, 0, 0.02, 0, { roughness: 0.3 });
+      add(g, new THREE.SphereGeometry(w / 2, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat(c, { side: THREE.DoubleSide, roughness: 0.3, emissive: c, emissiveIntensity: 0.35 }), 0, h * 0.55, 0).scale.y = (h * 0.45) / (w / 2);
+      cyl(g, w * 0.45, w * 0.45, 0.004, '#fff3d6', 0, h * 0.55, 0, { emissive: '#ffe6b0', emissiveIntensity: 1.8 });
+    },
+    // Architect desk lamp: two arms and a cone head pointing at the desk.
+    deskLamp(g, w, d, h, c) {
+      const bz = -d / 2 + 0.08;
+      cyl(g, 0.075, 0.08, 0.025, c, 0, 0, bz, METAL);
+      const elbow = [0, h * 0.62, bz + d * 0.15], head = [0, h * 0.82, bz + d * 0.62];
+      tube(g, [[0, 0.025, bz], elbow], 0.007, c, METAL);
+      tube(g, [elbow, head], 0.007, c, METAL);
+      ball(g, 0.012, c, ...elbow, METAL);
+      const cone = add(g, new THREE.CylinderGeometry(0.025, 0.07, 0.12, 24, 1, true), mat(c, { side: THREE.DoubleSide, ...METAL }), head[0], head[1] - 0.04, head[2]);
+      cone.rotation.x = 0.5;
+      ball(g, 0.025, '#fff3d6', head[0], head[1] - 0.08, head[2] + 0.03, { emissive: '#ffe6b0', emissiveIntensity: 2 });
+    },
+    globeTableLamp(g, w, d, h, c) {
+      cyl(g, w * 0.3, w * 0.34, h * 0.18, c, 0, 0, 0, METAL);
+      ball(g, Math.min(w, h * 0.82) / 2, '#fbf3e4', 0, h * 0.18 + Math.min(w, h * 0.82) / 2 - 0.01, 0, { emissive: '#ffe9c4', emissiveIntensity: 1.1, roughness: 0.3 });
+    },
+    // Lantern with a glowing candle inside.
+    lantern(g, w, d, h, c) {
+      const f = 0.012, bh = h * 0.75;
+      box(g, w, 0.02, d, c, 0, 0, 0, METAL);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, f, bh, f, c, sx * (w / 2 - f / 2), 0.02, sz * (d / 2 - f / 2), METAL);
+      box(g, w, 0.02, d, c, 0, bh, 0, METAL);
+      box(g, w - 0.01, bh - 0.02, d - 0.01, '#f4efe4', 0, 0.02, 0, { transparent: true, opacity: 0.25, roughness: 0.05, depthWrite: false });
+      add(g, new THREE.ConeGeometry(w * 0.45, h - bh - 0.02, 4), mat(c, METAL), 0, bh + 0.02 + (h - bh - 0.02) / 2, 0).rotation.y = Math.PI / 4;
+      cyl(g, 0.03, 0.03, bh * 0.4, '#f8f4ea', 0, 0.02, 0, {}, 14);
+      add(g, new THREE.ConeGeometry(0.01, 0.035, 6), glow('#ffcf6b', 2.6), 0, 0.02 + bh * 0.4 + 0.02, 0).castShadow = false;
+    },
+    // Ceramic base with a pleated fabric shade.
+    pleatedLamp(g, w, d, h, c) {
+      const bh = h * 0.5, pts = [];
+      for (let k = 0; k <= 12; k++) { const t = k / 12; pts.push(new THREE.Vector2(w * (0.12 + 0.2 * Math.sin(Math.PI * t)), t * bh)); }
+      add(g, new THREE.LatheGeometry(pts, 28), mat(c, { roughness: 0.2 }));
+      cyl(g, 0.006, 0.006, h * 0.12, '#c9a24a', 0, bh, 0, METAL, 6);
+      const geo = new THREE.CylinderGeometry(w * 0.28, w * 0.48, h * 0.42, 48, 1, true);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), z = pos.getZ(i), a = Math.atan2(z, x), k = 1 + 0.035 * (Math.round((a / (Math.PI * 2)) * 48) % 2 ? 1 : -1);
+        pos.setX(i, x * k); pos.setZ(i, z * k);
+      }
+      geo.computeVertexNormals();
+      add(g, geo, mat('#f3ead6', { side: THREE.DoubleSide, roughness: 1, emissive: '#fff1d0', emissiveIntensity: 0.45 }), 0, h * 0.58 + h * 0.21, 0);
+    },
+
+    // ---------- more floor lamps ----------
+    // Uplighter: a bowl on a slim pole throwing light at the ceiling.
+    torchiere(g, w, d, h, c) {
+      cyl(g, w * 0.4, w * 0.45, 0.03, c, 0, 0, 0, METAL);
+      cyl(g, 0.012, 0.012, h - 0.15, c, 0, 0.03, 0, METAL, 8);
+      cyl(g, w / 2, 0.05, 0.13, c, 0, h - 0.13, 0, { side: THREE.DoubleSide, ...METAL }, 28);
+      cyl(g, w / 2 - 0.01, w / 2 - 0.01, 0.004, '#fff3d6', 0, h - 0.006, 0, { emissive: '#ffe6b0', emissiveIntensity: 2 });
+    },
+    globeFloor(g, w, d, h, c) {
+      cyl(g, w * 0.4, w * 0.45, 0.03, c, 0, 0, 0, METAL);
+      const r = Math.min(w, d) / 2;
+      cyl(g, 0.012, 0.012, h - 2 * r, c, 0, 0.03, 0, METAL, 8);
+      ball(g, r, '#fbf3e4', 0, h - r, 0, { emissive: '#ffe9c4', emissiveIntensity: 1.1, roughness: 0.3 });
+    },
+    // Paper lantern on thin legs, glowing all over.
+    paperLantern(g, w, d, h, c) {
+      const legH = h * 0.22;
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2;
+        tube(g, [[Math.cos(a) * w * 0.35, 0, Math.sin(a) * w * 0.35], [Math.cos(a) * w * 0.12, legH + 0.05, Math.sin(a) * w * 0.12]], 0.006, DARK, METAL);
+      }
+      const pts = [];
+      for (let k = 0; k <= 16; k++) { const t = k / 16; pts.push(new THREE.Vector2((w / 2) * (0.35 + 0.65 * Math.sin(Math.PI * t)), t * (h - legH))); }
+      const shade = add(g, new THREE.LatheGeometry(pts, 32), mat(c, { side: THREE.DoubleSide, roughness: 1, emissive: c, emissiveIntensity: 0.6 }), 0, legH, 0);
+      shade.castShadow = false;
+      for (let k = 1; k < 8; k++) {
+        const t = k / 8, rr = (w / 2) * (0.35 + 0.65 * Math.sin(Math.PI * t));
+        const ring = add(g, new THREE.TorusGeometry(rr + 0.002, 0.002, 4, 32), mat('#d9cdb5'), 0, legH + t * (h - legH), 0);
+        ring.rotation.x = Math.PI / 2;
+      }
+    },
+    // Studio spotlight on a tripod.
+    spotTripod(g, w, d, h, c) {
+      const top = h - 0.25;
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2 + Math.PI / 6;
+        tube(g, [[Math.cos(a) * w * 0.45, 0, Math.sin(a) * d * 0.45], [0, top * 0.55, 0]], 0.01, 'wood:walnut');
+      }
+      cyl(g, 0.012, 0.012, top * 0.45, '#c0c4c6', 0, top * 0.55, 0, METAL, 8);
+      const head = new THREE.Group();
+      head.position.set(0, top + 0.1, 0);
+      head.rotation.x = 0.35;
+      g.add(head);
+      const can = add(head, new THREE.CylinderGeometry(0.13, 0.11, 0.3, 28, 1, true), mat(c, { side: THREE.DoubleSide, ...METAL }));
+      can.rotation.x = Math.PI / 2;
+      const lens = add(head, new THREE.CircleGeometry(0.12, 28), mat('#fff3d6', { emissive: '#ffe6b0', emissiveIntensity: 1.6 }), 0, 0, 0.14);
+      lens.castShadow = false;
+      for (const s of [-1, 1]) box(head, 0.015, 0.16, 0.03, '#c0c4c6', s * 0.14, -0.16, 0, METAL);
+    },
+    // Reading lamp: small head on a short arm, to put by an armchair.
+    readingLamp(g, w, d, h, c) {
+      cyl(g, w * 0.4, w * 0.45, 0.025, c, -w * 0.15, 0, 0, METAL);
+      cyl(g, 0.01, 0.01, h - 0.1, c, -w * 0.15, 0.025, 0, METAL, 8);
+      tube(g, [[-w * 0.15, h - 0.08, 0], [w * 0.05, h, 0], [w * 0.3, h - 0.03, 0]], 0.007, c, METAL);
+      const cone = add(g, new THREE.CylinderGeometry(0.03, 0.07, 0.13, 24, 1, true), mat(c, { side: THREE.DoubleSide, ...METAL }), w * 0.32, h - 0.1, 0);
+      cone.rotation.z = -0.3;
+      ball(g, 0.025, '#fff3d6', w * 0.33, h - 0.14, 0, { emissive: '#ffe6b0', emissiveIntensity: 2 });
+    },
+    // Slim glowing column.
+    tubeLamp(g, w, d, h, c) {
+      cyl(g, w * 0.45, w * 0.5, 0.03, c, 0, 0, 0, METAL);
+      cyl(g, w * 0.22, w * 0.22, h - 0.06, '#fff8ea', 0, 0.03, 0, { emissive: '#ffefd0', emissiveIntensity: 1.3, roughness: 0.3 }, 20);
+      cyl(g, w * 0.26, w * 0.26, 0.03, c, 0, h - 0.03, 0, METAL);
+    },
+
     // ---------- plants ----------
     flowers(g, w, d, h, c, it) {
       const r = mulberry(seedOf(it));
