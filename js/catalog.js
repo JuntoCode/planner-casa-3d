@@ -321,6 +321,57 @@ const B = {
     line.castShadow = false;
     line.userData.swing = true;
   },
+  // Two leaves with glass, opening from the middle.
+  doubleDoor(g, w, d, h, c) {
+    const f = 0.06;
+    doorFrame(g, w, d, h, f);
+    const lw = (w - 2 * f) / 2;
+    for (const s of [-1, 1]) {
+      const leaf = hinged(g, s * (w / 2 - f), 0, 0, { axis: 'y', to: (s * Math.PI) / 2 });
+      const cx = (-s * lw) / 2;
+      for (const x of [cx - lw / 2 + 0.05, cx + lw / 2 - 0.05]) box(leaf, 0.1, h - f - 0.01, 0.045, c, x, 0.01, 0);
+      for (const y of [0.01, 0.9, h - f - 0.12]) box(leaf, lw - 0.2, 0.11, 0.045, c, cx, y, 0);
+      for (const [y0, y1] of [[0.12, 0.9], [1.01, h - f - 0.12]]) box(leaf, lw - 0.2, y1 - y0, 0.01, '#bfe0f0', cx, y0, 0, GLASS);
+      box(leaf, 0.02, 0.18, 0.06, '#9a9a9a', -s * (lw - 0.07), 0.95, 0, METAL);
+      swingArc(g, s * (w / 2 - f), lw, d, s);
+    }
+    g.children.forEach(m => { if (!m.userData.swing) m.userData.tall = true; });
+  },
+  // Pocket door: the leaf slides into the wall.
+  pocketDoor(g, w, d, h, c) {
+    const f = 0.06;
+    doorFrame(g, w, d, h, f);
+    const lw = w - 2 * f;
+    const leaf = hinged(g, 0, 0, 0, { slide: -(lw - 0.06) });
+    box(leaf, lw, h - f - 0.01, 0.04, c, 0, 0.01, 0);
+    for (const z of [-1, 1]) box(leaf, 0.03, 0.12, 0.004, '#9a9a9a', lw / 2 - 0.06, 0.95, z * 0.022, METAL);
+    g.children.forEach(m => { m.userData.tall = true; });
+  },
+  // Armoured front door: thick panelled leaf, long handle, spy hole.
+  frontDoor(g, w, d, h, c) {
+    const f = 0.08;
+    doorFrame(g, w, d, h, f, '#3b3f45');
+    const lw = w - 2 * f;
+    const leaf = hinged(g, -lw / 2, 0, 0, { axis: 'y', to: -Math.PI / 2 });
+    box(leaf, lw, h - f - 0.01, 0.07, c, lw / 2, 0.01, 0, { roughness: 0.5 });
+    for (const z of [-1, 1]) for (const [y0, y1] of [[0.15, 0.95], [1.1, h - f - 0.15]]) box(leaf, lw - 0.2, y1 - y0, 0.01, shade(c, 0.06), lw / 2, y0, z * 0.038, { roughness: 0.5 });
+    for (const z of [-1, 1]) box(leaf, 0.03, 0.4, 0.04, '#c0c4c6', lw - 0.1, 0.85, z * 0.05, METAL);
+    for (const z of [-1, 1]) cyl(leaf, 0.008, 0.008, 0.01, '#c9a24a', lw / 2, 1.5, z * 0.04, METAL, 10).rotation.x = Math.PI / 2;
+    box(g, w, 0.02, d + 0.06, '#7d776e', 0, 0, 0);
+    g.children.forEach(m => { if (!m.userData.swing) m.userData.tall = true; });
+    swingArc(g, -lw / 2, lw, d, -1);
+  },
+  // Up-and-over garage door: the panel tips up into the garage.
+  garageDoor(g, w, d, h, c) {
+    const f = 0.08;
+    doorFrame(g, w, d, h, f, '#5b5f63');
+    const leaf = hinged(g, 0, h - f, 0, { axis: 'x', to: -Math.PI / 2 });
+    const ph = h - f - 0.01;
+    box(leaf, w - 2 * f, ph, 0.04, c, 0, -ph, 0, { roughness: 0.4, metalness: 0.3 });
+    for (let y = 0.15; y < ph; y += 0.15) for (const z of [-1, 1]) box(leaf, w - 2 * f - 0.04, 0.012, 0.004, shade(c, -0.12), 0, -y, z * 0.022);
+    for (const z of [-1, 1]) box(leaf, 0.2, 0.03, 0.03, '#2b2b2b', 0, -ph + 0.25, z * 0.03);
+    g.children.forEach(m => { m.userData.tall = true; });
+  },
   arch(g, w, d, h, c) {
     const f = 0.05;
     for (const s of [-1, 1]) box(g, f, h, d + 0.02, c, s * (w / 2 - f / 2), 0, 0);
@@ -373,6 +424,23 @@ const B = {
 
 // A part that opens: a group placed on its hinge (or slide start) carrying userData.move,
 // which main.js animates: { axis, to } turns it by `to` radians, { slide } moves it along x.
+function doorFrame(g, w, d, h, f, color = WHITE) {
+  for (const s of [-1, 1]) box(g, f, h, d + 0.03, color, s * (w / 2 - f / 2), 0, 0);
+  box(g, w, f, d + 0.03, color, 0, h - f, 0);
+}
+
+// Quarter circle on the floor showing where a leaf hinged at x swings (s = -1 left hinge, 1 right).
+function swingArc(g, x, r, d, s) {
+  const arc = new THREE.Mesh(
+    new THREE.RingGeometry(r - 0.012, r, 32, 1, s < 0 ? 0 : Math.PI / 2, Math.PI / 2),
+    mat('#7a8794', { side: THREE.DoubleSide }),
+  );
+  arc.rotation.x = Math.PI / 2;
+  arc.position.set(x, 0.004, d / 2);
+  arc.userData.swing = true;
+  g.add(arc);
+}
+
 function hinged(g, x, y, z, move) {
   const p = new THREE.Group();
   p.position.set(x, y, z);
@@ -434,6 +502,39 @@ export const CATALOG = [
     { type: 'fireplace', name: 'Camino', build: 'fireplace', w: 140, d: 40, h: 110, color: '#efebe4', surface: true },
     { type: 'curtains', name: 'Tende', build: 'curtains', w: 180, d: 15, h: 250, elev: 10, color: '#e9e1d3', wallMount: true, noCollide: true },
     { type: 'radiator', name: 'Termosifone', build: 'radiator', w: 80, d: 10, h: 60, elev: 12, color: '#ffffff', wallMount: true },
+    { type: 'blind', name: 'Veneziana', build: 'blind', w: 120, d: 6, h: 140, elev: 85, color: '#f4f3ef', wallMount: true, noCollide: true },
+  ] },
+  { cat: 'Bambini', items: [
+    { type: 'bunkBed', name: 'Letto a castello', build: 'bunkBed', w: 100, d: 205, h: 165, color: 'wood:ash' },
+    { type: 'crib', name: 'Lettino neonato', build: 'crib', w: 70, d: 130, h: 90, color: '#ffffff' },
+    { type: 'changingTable', name: 'Fasciatoio', build: 'changingTable', w: 80, d: 55, h: 95, color: '#ffffff' },
+    { type: 'toyBox', name: 'Cesta dei giochi', build: 'toyBox', w: 60, d: 40, h: 40, color: '#e8b7a8' },
+    { type: 'teepee', name: 'Tenda indiana', build: 'teepee', w: 120, d: 120, h: 165, color: '#f2ead8' },
+    { type: 'rockingHorse', name: 'Cavallo a dondolo', build: 'rockingHorse', w: 32, d: 80, h: 70, color: '#d94a3a' },
+  ] },
+  { cat: 'Lavanderia e clima', items: [
+    { type: 'dryer', name: 'Asciugatrice', build: 'washer', w: 60, d: 62, h: 85, color: '#e6e8ea', surface: true },
+    { type: 'dryingRack', name: 'Stendino', build: 'dryingRack', w: 140, d: 55, h: 95, color: '#c0c4c6' },
+    { type: 'ironingBoard', name: 'Asse da stiro', build: 'ironingBoard', w: 120, d: 38, h: 90, color: '#9fb8c8' },
+    { type: 'vacuum', name: 'Aspirapolvere', build: 'vacuum', w: 26, d: 25, h: 110, color: '#8c6bb1' },
+    { type: 'boiler', name: 'Caldaia murale', build: 'boiler', w: 42, d: 30, h: 70, elev: 140, color: '#f4f3ef', wallMount: true },
+    { type: 'airConditioner', name: 'Condizionatore', build: 'airConditioner', w: 90, d: 25, h: 30, elev: 215, color: '#ffffff', wallMount: true },
+    { type: 'ceilingFan', name: 'Ventilatore a soffitto', build: 'ceilingFan', w: 120, d: 120, h: 45, color: '#c9a24a', ceiling: true },
+    { type: 'standFan', name: 'Ventilatore a piantana', build: 'standFan', w: 45, d: 45, h: 130, color: '#f4f3ef' },
+  ] },
+  { cat: 'Sport e giochi', items: [
+    { type: 'treadmill', name: 'Tapis roulant', build: 'treadmill', w: 80, d: 180, h: 140, color: '#5b5f63' },
+    { type: 'exerciseBike', name: 'Cyclette', build: 'exerciseBike', w: 55, d: 110, h: 130, color: '#c0392b' },
+    { type: 'yogaMat', name: 'Tappetino yoga', build: 'rug', w: 61, d: 183, h: 1, color: '#8c6bb1', noCollide: true },
+    { type: 'dumbbells', name: 'Rastrelliera manubri', build: 'dumbbells', w: 60, d: 35, h: 70, color: '#2b2b2b' },
+    { type: 'poolTable', name: 'Biliardo', build: 'poolTable', w: 140, d: 250, h: 80, color: '#2f6b4f' },
+    { type: 'pingPong', name: 'Ping pong', build: 'pingPong', w: 152, d: 274, h: 76, color: '#2f4a6b', openBelow: true },
+    { type: 'dartboard', name: 'Freccette', build: 'dartboard', w: 45, d: 5, h: 45, elev: 150, color: '#1d1d1f', wallMount: true, noCollide: true },
+    { type: 'bike', name: 'Bicicletta', build: 'bike', w: 60, d: 175, h: 100, color: '#3f6fb0' },
+  ] },
+  { cat: 'Scale', items: [
+    { type: 'stairs', name: 'Scala dritta', build: 'stairs', w: 90, d: 300, h: 270, color: 'wood:oak' },
+    { type: 'spiralStairs', name: 'Scala a chiocciola', build: 'spiralStairs', w: 160, d: 160, h: 270, color: 'wood:oak' },
   ] },
   { cat: 'Ingresso', items: [
     { type: 'shoeCabinet', name: 'Scarpiera', build: 'shoeCabinet', w: 80, d: 26, h: 110, color: '#f2f0eb', surface: true },
@@ -465,6 +566,9 @@ export const CATALOG = [
     { type: 'wardrobe', name: 'Armadio', build: 'wardrobe', w: 200, d: 60, h: 236, color: '#f2f0eb' },
     { type: 'nightstand', name: 'Comodino', build: 'nightstand', w: 45, d: 40, h: 50, color: '#c9a57a', surface: true },
     { type: 'dresser', name: 'Cassettiera', build: 'dresser', w: 80, d: 48, h: 80, color: '#f2f0eb', surface: true },
+    { type: 'slidingWardrobe', name: 'Armadio scorrevole a specchio', build: 'slidingWardrobe', w: 240, d: 65, h: 240, color: '#f2f0eb' },
+    { type: 'vanity', name: 'Toeletta con specchio', build: 'vanity', w: 100, d: 45, h: 145, color: '#f2f0eb', surface: 76 },
+    { type: 'trunk', name: 'Baule', build: 'trunk', w: 90, d: 45, h: 50, color: 'wood:walnut', surface: true },
   ] },
   { cat: 'Cucina', items: [
     { type: 'kitchenBase', name: 'Base cucina', build: 'kitchenBase', w: 60, d: 62, h: 90, color: '#e9e6df', surface: true },
@@ -514,11 +618,16 @@ export const CATALOG = [
   { cat: 'Ufficio', items: [
     { type: 'desk', name: 'Scrivania', build: 'desk', w: 140, d: 70, h: 75, color: '#f2f0eb', openBelow: true, surface: true },
     { type: 'officeChair', name: 'Sedia da ufficio', build: 'officeChair', w: 60, d: 60, h: 105, color: '#3b3f45', tucks: true },
+    { type: 'lDesk', name: 'Scrivania angolare', build: 'lDesk', w: 160, d: 140, h: 75, color: '#f2f0eb', surface: true, openBelow: true },
+    { type: 'filingCabinet', name: 'Cassettiera con ruote', build: 'filingCabinet', w: 42, d: 55, h: 62, color: '#f2f0eb', surface: true },
+    { type: 'pinBoard', name: 'Bacheca', build: 'pinBoard', w: 90, d: 3, h: 60, elev: 110, color: 'wood:oak', wallMount: true, noCollide: true },
   ] },
   { cat: 'Tecnologia', items: [
     { type: 'pc', name: 'PC (monitor e tastiera)', build: 'pc', w: 60, d: 35, h: 45, elev: 75, color: '#2b2b2b', onTop: true, prefers: ['desk'] },
     { type: 'pcTower', name: 'Case PC', build: 'pcTower', w: 21, d: 45, h: 46, color: '#2b2b2b', onTop: true, prefers: ['desk'] },
     { type: 'laptop', name: 'Portatile', build: 'laptop', w: 34, d: 24, h: 22, elev: 75, color: '#b9c0c4', onTop: true, prefers: ['desk', 'table', 'coffeeTable'] },
+    { type: 'printer', name: 'Stampante', build: 'printer', w: 45, d: 35, h: 22, color: '#2b2b2b', onTop: true, prefers: ['desk', 'lDesk', 'filingCabinet', 'sideboard'] },
+    { type: 'gameConsole', name: 'Console videogiochi', build: 'gameConsole', w: 30, d: 20, h: 8, color: '#f4f3ef', onTop: true, prefers: ['tvStand', 'tvUnit', 'sideboard'] },
     { type: 'tvWall', name: 'TV a parete', build: 'tvWall', w: 125, d: 5, h: 72, elev: 95, color: '#1d1d1f', wallMount: true },
   ] },
   { cat: 'Luci', items: [
@@ -627,10 +736,20 @@ export const CATALOG = [
     { type: 'lampPost', name: 'Lampione da giardino', build: 'lampPost', w: 30, d: 30, h: 190, color: '#2b2b2b', outdoor: true },
     { type: 'shed', name: 'Casetta attrezzi', build: 'shed', w: 200, d: 160, h: 230, color: '#8a9a7b', outdoor: true },
     { type: 'pergola', name: 'Pergola', build: 'pergola', w: 350, d: 300, h: 250, color: 'wood:oak', outdoor: true, hit: 'posts' },
+    { type: 'hammock', name: 'Amaca con supporto', build: 'hammock', w: 320, d: 100, h: 120, color: '#e9d27a', outdoor: true },
+    { type: 'swing', name: 'Altalena', build: 'swing', w: 220, d: 160, h: 210, color: '#d94a3a', outdoor: true, hit: 'posts' },
+    { type: 'trampoline', name: 'Tappeto elastico', build: 'trampoline', w: 300, d: 300, h: 220, color: '#3f6fb0', outdoor: true },
+    { type: 'firePit', name: 'Braciere', build: 'firePit', w: 100, d: 100, h: 35, color: '#8a8378', outdoor: true },
+    { type: 'fountain', name: 'Fontana', build: 'fountain', w: 150, d: 150, h: 140, color: '#d9d2c4', outdoor: true },
+    { type: 'car', name: 'Automobile', build: 'car', w: 180, d: 440, h: 150, color: '#2f4a6b', outdoor: true },
   ] },
   { cat: 'Porte e finestre', items: [
     { type: 'door', name: 'Porta', build: 'door', w: 80, d: 10, h: 210, color: '#f2f0eb', opening: true },
     { type: 'door90', name: 'Porta 90', build: 'door', w: 90, d: 10, h: 210, color: '#8a6a4a', opening: true },
+    { type: 'pocketDoor', name: 'Porta scorrevole a scomparsa', build: 'pocketDoor', w: 80, d: 10, h: 210, color: '#f2f0eb', opening: true },
+    { type: 'doubleDoor', name: 'Porta doppia a vetri', build: 'doubleDoor', w: 140, d: 10, h: 220, color: '#f2f0eb', opening: true },
+    { type: 'frontDoor', name: "Porta d'ingresso blindata", build: 'frontDoor', w: 90, d: 10, h: 215, color: '#5b4636', opening: true },
+    { type: 'garageDoor', name: 'Porta garage basculante', build: 'garageDoor', w: 250, d: 10, h: 220, color: '#b9c0c4', opening: true },
     { type: 'arch', name: 'Passaggio', build: 'arch', w: 100, d: 10, h: 220, color: '#f4f3ef', opening: true },
     { type: 'window', name: 'Finestra', build: 'window', w: 120, d: 10, h: 130, elev: 90, color: '#f4f3ef', opening: true },
     { type: 'vasistas', name: 'Vasistas (bagno)', build: 'vasistas', w: 80, d: 10, h: 45, elev: 175, color: '#f4f3ef', opening: true },

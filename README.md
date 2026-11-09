@@ -16,15 +16,24 @@ senza build: HTML, CSS e JavaScript modules.
   e si possono sempre cambiare a mano.
 - **Modifica**: trascina muri (le stanze vicine si adattano), angoli, il rombo arancione per curvare
   un muro; scrivi le misure dei lati; dividi o elimina un muro.
-- **Porte e finestre** (anche portefinestre e vetrate scorrevoli): si agganciano ai muri e li tagliano;
+- **Porte e finestre** (anche portefinestre, vetrate scorrevoli, porta a scomparsa, porta doppia a vetri,
+  porta d'ingresso blindata, porta del garage basculante, veneziane): si agganciano ai muri e li tagliano;
   la porta mostra l'arco di apertura.
-- **Mobili e oggetti** (quasi 200): soggiorno, camera, cucina, bagno, ufficio, più
+- **Mobili e oggetti** (oltre 230): soggiorno, camera, cucina, bagno, ufficio, più
   - **soggiorno**: divano angolare, madia, parete attrezzata TV, vetrina, libreria a cubi, mensole sfalsate,
     pensile, tavolino laterale, pouf, poltrona sacco, camino, tende, termosifone;
   - **cucina**: isola, sgabelli, lavastoviglie, colonna forno, pattumiera, portaspezie e barra portautensili;
     sul piano bollitore, tostapane, ceppo coltelli, portamestoli, scolapiatti, pentole, barattoli, tagliere;
   - **bagno**: pensile a specchio, portasciugamani, scaldasalviette, portarotolo, tappetino, cesto biancheria,
     scaletta portasciugamani, bilancia, set sapone e spazzolini sul lavabo;
+  - **bambini**: letto a castello, lettino neonato, fasciatoio, cesta dei giochi, tenda indiana, cavallo a dondolo;
+  - **camera**: anche armadio scorrevole a specchio, toeletta, baule;
+  - **lavanderia e clima**: asciugatrice, stendino, asse da stiro, aspirapolvere, caldaia, condizionatore,
+    ventilatore a soffitto e a piantana;
+  - **sport e giochi**: tapis roulant, cyclette, tappetino yoga, manubri, biliardo, ping pong, freccette,
+    console, bicicletta;
+  - **scale**: dritta e a chiocciola;
+  - **ufficio**: anche scrivania angolare, cassettiera con ruote, stampante, bacheca;
   - **ingresso**: scarpiera, panca portascarpe, consolle, appendiabiti a muro e a stelo, portaombrelli;
   - **da appoggiare**: libri, candele, cornice, vaso, fruttiera, cassa audio, giradischi, microonde, macchina del caffè;
   - **decorazioni**: quadri, poster, arazzo mandala, acchiappasogni, specchi, orologio, mensola con libri, vaso di fiori;
@@ -48,7 +57,9 @@ senza build: HTML, CSS e JavaScript modules.
 - **Giardino e patio**: lo strumento *Giardino* disegna una staccionata (o siepe) anche tutto intorno
   alla casa, *Patio* un cordolo per una zona pavimentata. In giardino: alberi, ulivo, cipresso,
   cespugli, aiuole, lavanda, orto, piscina, pergola, ombrellone, lettino, barbecue, panchina,
-  lampione, casetta degli attrezzi, cuccia del cane.
+  lampione, casetta degli attrezzi, cuccia del cane, amaca, altalena, tappeto elastico, braciere, fontana, auto.
+- **Pareti**: per ogni stanza colore e finitura (pittura, carte da parati a righe, damascata, botanica,
+  art déco, mattoni a vista, boiserie, cemento, piastrelle); ogni lato del muro segue la sua stanza.
 - **Pavimenti**: parquet, spina di pesce, marmo, gres, scacchiera, esagonette, cementine, mosaico,
   ardesia, graniglia, cotto; fuori prato, ghiaia, lastre di pietra, autobloccanti, doghe.
 - **Finiture e stili**: legni (rovere, frassino, ciliegio, noce, wengé) e 18 colori; stili con un clic

@@ -24,7 +24,7 @@ export function artTexture(kind, seed = 1) {
 }
 
 // Texture kinds meant to repeat over a surface (wall tiles).
-const REPEAT = new Set(['subway', 'wallMosaic', 'wallHex']);
+const REPEAT = new Set(['subway', 'wallMosaic', 'wallHex', 'wpStripes', 'wpDamask', 'wpBotanical', 'wpGeo', 'brick', 'woodPanel', 'concreteWall']);
 
 function rng(seed) {
   let s = seed % 2147483647 || 1;
@@ -339,6 +339,99 @@ const PAINT = {
       g.fill();
     }
     r();
+  },
+
+  // ---- wall finishes (repeat over the walls; light colours so the paint colour can tint them) ----
+  wpStripes(g) {
+    g.fillStyle = '#f6f2ea';
+    g.fillRect(0, 0, 512, 512);
+    for (let x = 0; x < 512; x += 64) {
+      g.fillStyle = '#e4dccd';
+      g.fillRect(x, 0, 30, 512);
+      g.fillStyle = '#d8ccb6';
+      g.fillRect(x + 44, 0, 3, 512);
+    }
+  },
+  wpDamask(g) {
+    g.fillStyle = '#f1ebdf';
+    g.fillRect(0, 0, 512, 512);
+    g.fillStyle = '#ddd1bb';
+    const motif = (cx, cy) => {
+      for (const s of [-1, 1]) {
+        g.beginPath();
+        g.moveTo(cx, cy - 90);
+        g.bezierCurveTo(cx + s * 70, cy - 60, cx + s * 20, cy - 10, cx + s * 60, cy + 20);
+        g.bezierCurveTo(cx + s * 90, cy + 50, cx + s * 30, cy + 90, cx, cy + 70);
+        g.closePath();
+        g.fill();
+      }
+      g.beginPath(); g.arc(cx, cy - 100, 10, 0, Math.PI * 2); g.fill();
+    };
+    for (const [x, y] of [[128, 128], [384, 384]]) for (const dx of [-512, 0, 512]) for (const dy of [-512, 0, 512]) motif(x + dx, y + dy);
+  },
+  wpBotanical(g, r) {
+    g.fillStyle = '#eef1ea';
+    g.fillRect(0, 0, 512, 512);
+    const greens = ['#9fb58f', '#7f9a72', '#b8c9a8', '#6d8a62'];
+    for (let k = 0; k < 34; k++) {
+      const x = r() * 512, y = r() * 512, a = r() * Math.PI * 2, len = 30 + r() * 40, col = pick(r, greens);
+      for (const dx of [-512, 0, 512]) for (const dy of [-512, 0, 512]) {
+        g.save();
+        g.translate(x + dx, y + dy);
+        g.rotate(a);
+        g.fillStyle = col;
+        g.beginPath(); g.ellipse(0, -len / 2, len * 0.28, len / 2, 0, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 1.5;
+        g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -len); g.stroke();
+        g.restore();
+      }
+    }
+  },
+  // Art deco fans.
+  wpGeo(g) {
+    g.fillStyle = '#f3efe8';
+    g.fillRect(0, 0, 512, 512);
+    g.strokeStyle = '#c9a24a';
+    g.lineWidth = 3;
+    const rr = 64;
+    for (let j = -1; j <= 8; j++) for (let i = -1; i <= 4; i++) {
+      const cx = i * 128 + (j % 2 ? 64 : 0), cy = j * 64;
+      for (const k of [1, 0.66, 0.33]) { g.beginPath(); g.arc(cx, cy + rr, rr * k, Math.PI, 0); g.stroke(); }
+    }
+  },
+  brick(g, r) {
+    g.fillStyle = '#cbc2b4';
+    g.fillRect(0, 0, 512, 512);
+    const rows = 10, rh = 512 / rows, bw = 512 / 3;
+    for (let j = 0; j < rows; j++) for (let i = -1; i < 4; i++) {
+      const x = i * bw + (j % 2 ? bw / 2 : 0);
+      g.fillStyle = new THREE.Color(pick(r, ['#a5553a', '#9a4b33', '#b0654a', '#8f4630'])).offsetHSL(0, 0, (r() - 0.5) * 0.08).getStyle();
+      g.fillRect(x + 3, j * rh + 3, bw - 6, rh - 6);
+    }
+  },
+  // Wood panelling: vertical boards.
+  woodPanel(g, r) {
+    for (let i = 0; i < 10; i++) {
+      g.fillStyle = new THREE.Color('#c49a6c').offsetHSL(0, (r() - 0.5) * 0.05, (r() - 0.5) * 0.08).getStyle();
+      g.fillRect(i * 51.2, 0, 51.2, 512);
+      g.fillStyle = 'rgba(80,50,20,0.12)';
+      for (let k = 0; k < 6; k++) g.fillRect(i * 51.2 + 4 + r() * 42, 0, 1 + r() * 1.5, 512);
+      g.fillStyle = 'rgba(40,25,10,0.45)';
+      g.fillRect(i * 51.2, 0, 2, 512);
+    }
+  },
+  concreteWall(g, r) {
+    g.fillStyle = '#bdbab4';
+    g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 9000; i++) {
+      g.fillStyle = r() > 0.5 ? `rgba(255,255,255,${0.06 * r()})` : `rgba(0,0,0,${0.07 * r()})`;
+      g.fillRect(r() * 512, r() * 512, 1 + r() * 3, 1 + r() * 3);
+    }
+    g.fillStyle = 'rgba(0,0,0,0.12)';
+    g.fillRect(0, 0, 512, 2);
+    g.fillRect(0, 0, 2, 512);
+    g.fillStyle = 'rgba(0,0,0,0.25)';
+    for (const [x, y] of [[64, 64], [448, 64], [64, 448], [448, 448]]) { g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.fill(); }
   },
 
   // A computer desktop: wallpaper and a couple of windows.

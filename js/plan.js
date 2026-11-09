@@ -468,15 +468,15 @@ function guessType(st, r, { byId, faceCount, largest }) {
   if (has('toilet', 'bidet', 'shower', 'bathtub', 'washbasin')) return 'bath';
   if (has(...KITCHEN)) return has(...SOFA) ? 'living' : 'kitchen';
   if (has('bed2')) return 'bedroom';
-  if (has('bed1')) return 'kidsroom';
+  if (has('bed1', 'bunkBed', 'crib', 'changingTable')) return 'kidsroom';
   if (has(...SOFA)) return 'living';
   if (has('desk', 'officeChair')) return 'study';
-  if (has('washer') && m2 < 8) return 'laundry';
+  if (has('washer', 'dryer', 'dryingRack', 'ironingBoard') && m2 < 8) return 'laundry';
   if (has(...HALL) && m2 < 12) return 'entrance';
   const per = G.perimeter(r.pts);
   const width = (2 * r.area) / per;
   const elongated = (per * per) / r.area > 24;
-  const entrance = st.items.some(it => it.wall && ['door', 'door90'].includes(it.type) && r.walls.includes(it.wall) && faceCount.get(it.wall) === 1);
+  const entrance = st.items.some(it => it.wall && ['door', 'door90', 'frontDoor'].includes(it.type) && r.walls.includes(it.wall) && faceCount.get(it.wall) === 1);
   if (m2 < 3) return 'storage';
   if (entrance && m2 < 12) return 'entrance';
   // A small area cut off by an invisible divider is usually the entrance.

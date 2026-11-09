@@ -710,6 +710,412 @@ export function decorBuilders({ box, cyl, mat, shade, mulberry, def, DARK, WHITE
       box(g, 0.08, 0.015, 0.06, '#2b2b2b', 0, 0, w / 2);
     },
 
+    // ---------- bedroom and kids ----------
+    bunkBed(g, w, d, h, c) {
+      const p = 0.06;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, p, h, p, c, sx * (w / 2 - p / 2), 0, sz * (d / 2 - p / 2));
+      for (const y of [0.2, h * 0.58]) {
+        box(g, w, 0.06, d, c, 0, y, 0);
+        box(g, w - 0.08, 0.16, d - 0.1, '#ffffff', 0, y + 0.06, 0);
+        box(g, w - 0.16, 0.1, 0.35, '#ffffff', 0, y + 0.22, -d / 2 + 0.25);
+        box(g, w - 0.1, 0.03, d * 0.6, '#9fb8c8', 0, y + 0.22, d * 0.12, { roughness: 1 });
+      }
+      for (const y of [h * 0.58 + 0.25, h - 0.05]) for (const s of [-1, 1]) box(g, p * 0.5, 0.04, d * (s > 0 ? 0.6 : 1), c, s * (w / 2 - p / 2), y, s > 0 ? -d * 0.2 : 0);
+      for (let k = 0; k < 4; k++) box(g, w * 0.25, 0.03, 0.04, c, w / 2 - w * 0.18, 0.4 + k * (h * 0.58 - 0.3) / 3, d / 2 - 0.08);
+      for (const s of [-1, 1]) box(g, 0.04, h * 0.85, 0.04, c, w / 2 - w * 0.18 + s * w * 0.12, 0.2, d / 2 - 0.08);
+    },
+    crib(g, w, d, h, c) {
+      const p = 0.04, bed = 0.35;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, p, h, p, c, sx * (w / 2 - p / 2), 0, sz * (d / 2 - p / 2));
+      box(g, w - 0.04, 0.04, d - 0.04, c, 0, bed, 0);
+      box(g, w - 0.08, 0.1, d - 0.08, '#ffffff', 0, bed + 0.04, 0);
+      box(g, w - 0.1, 0.03, d * 0.5, '#e8b7a8', 0, bed + 0.14, d * 0.15, { roughness: 1 });
+      for (const sz of [-1, 1]) for (const y of [bed, h - 0.04]) box(g, w, 0.035, 0.03, c, 0, y, sz * (d / 2 - 0.015));
+      for (const sx of [-1, 1]) for (const y of [bed, h - 0.04]) box(g, 0.03, 0.035, d, c, sx * (w / 2 - 0.015), y, 0);
+      for (let x = -w / 2 + 0.08; x < w / 2 - 0.04; x += 0.07) for (const sz of [-1, 1]) box(g, 0.02, h - bed - 0.04, 0.02, c, x, bed, sz * (d / 2 - 0.015));
+      for (let z = -d / 2 + 0.08; z < d / 2 - 0.04; z += 0.07) for (const sx of [-1, 1]) box(g, 0.02, h - bed - 0.04, 0.02, c, sx * (w / 2 - 0.015), bed, z);
+    },
+    changingTable(g, w, d, h, c) {
+      box(g, w, h - 0.15, d, c, 0, 0, 0);
+      fronts(g, w, h - 0.17, d, 2, 0.02);
+      for (const s of [-1, 1]) box(g, 0.02, 0.12, d, c, s * (w / 2 - 0.01), h - 0.15, 0);
+      box(g, w, 0.12, 0.02, c, 0, h - 0.15, -d / 2 + 0.01);
+      box(g, w - 0.06, 0.06, d - 0.06, '#9fb8c8', 0, h - 0.15, 0.01, { roughness: 1 });
+    },
+    toyBox(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      box(g, w, h, d, c, 0, 0, 0, { roughness: 1 });
+      box(g, w - 0.04, 0.01, d - 0.04, shade(c, -0.25), 0, h - 0.06, 0);
+      const cols = ['#d94a3a', '#f2c14e', '#3f6fb0', '#56a05a', '#9b5c7a'];
+      for (let k = 0; k < 5; k++) ball(g, 0.05 + r() * 0.03, cols[k], (r() - 0.5) * w * 0.6, h - 0.02, (r() - 0.5) * d * 0.5, { roughness: 0.4 });
+      for (let k = 0; k < 4; k++) box(g, 0.06, 0.06, 0.06, cols[(k + 2) % 5], -w / 2 - 0.08 + k * 0.07, 0, d / 2 + 0.06 + (k % 2) * 0.05).rotation.y = r();
+      const bear = ball(g, 0.07, '#a77a4a', w / 2 + 0.1, 0.07, 0, { roughness: 1 });
+      ball(g, 0.05, '#a77a4a', w / 2 + 0.1, 0.18, 0, { roughness: 1 });
+      bear.scale.y = 1.1;
+    },
+    // Kids' play tent: four poles crossing at the top and a fabric pyramid, open at the front.
+    teepee(g, w, d, h, c, it) {
+      const r = w / 2, top = h;
+      const corners = [[-r, -r], [r, -r], [r, r], [-r, r]].map(([x, z]) => [x * 0.95, z * 0.95]);
+      for (const [x, z] of corners) tube(g, [[x, 0, z], [-x * 0.25, top + 0.15, -z * 0.25]], 0.012, 'wood:oak');
+      const tip = new THREE.Vector3(0, top * 0.92, 0);
+      const sides = [[3, 0], [0, 1], [1, 2]]; // back and sides; the front (2 -> 3) stays open
+      for (const [a, b] of sides) {
+        const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(corners[a][0], 0, corners[a][1]), new THREE.Vector3(corners[b][0], 0, corners[b][1]), tip]);
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0.5, 1], 2));
+        geo.computeVertexNormals();
+        add(g, geo, texMat(artTexture('kilim', seedOf(it)), { side: THREE.DoubleSide, roughness: 1 }, c));
+      }
+      for (const s of [-1, 1]) {
+        const flap = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(s * r * 0.95, 0, r * 0.95), new THREE.Vector3(s * r * 0.35, 0, r * 0.75), tip]);
+        flap.computeVertexNormals();
+        add(g, flap, mat(c, { side: THREE.DoubleSide, roughness: 1 }));
+      }
+      box(g, w * 0.8, 0.04, d * 0.8, '#d9b44a', 0, 0, 0, { roughness: 1 }).castShadow = false;
+    },
+    rockingHorse(g, w, d, h, c) {
+      for (const s of [-1, 1]) {
+        const pts = [];
+        for (let k = 0; k <= 12; k++) { const a = -0.7 + (k / 12) * 1.4; pts.push([s * w * 0.4, 0.5 - Math.cos(a) * 0.48, Math.sin(a) * d * 0.62]); }
+        tube(g, pts, 0.015, 'wood:walnut');
+      }
+      const body = ball(g, 0.5, c, 0, h * 0.55, 0, { roughness: 0.5 });
+      body.scale.set(w * 0.8, h * 0.28, d * 0.6);
+      const head = box(g, w * 0.55, h * 0.35, d * 0.2, c, 0, h * 0.6, d * 0.32, { roughness: 0.5 });
+      head.rotation.x = -0.4;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) tube(g, [[sx * w * 0.2, h * 0.5, sz * d * 0.18], [sx * w * 0.4, 0.08, sz * d * 0.3]], 0.015, c);
+      box(g, w * 0.15, h * 0.25, d * 0.3, '#f2ead8', 0, h * 0.62, d * 0.12, { roughness: 1 });
+    },
+    vanity(g, w, d, h, c) {
+      const top = 0.76;
+      box(g, w, 0.04, d, c, 0, top - 0.04, 0);
+      for (const s of [-1, 1]) { box(g, 0.32, top - 0.04, d, c, s * (w / 2 - 0.16), 0, 0); fronts(g, 0.32, top - 0.06, d, 1, 0.02, 0, s * (w / 2 - 0.16)); }
+      box(g, w - 0.64, 0.14, d, c, 0, top - 0.18, 0);
+      const r = Math.min(w * 0.3, (h - top) / 2 - 0.02);
+      disc(g, r + 0.02, 0.03, c, 0, top + r + 0.02, -d / 2 + 0.03);
+      disc(g, r, 0.006, '#cfdde3', 0, top + r + 0.02, -d / 2 + 0.05, { metalness: 0.35, roughness: 0.06 });
+      for (let k = 0; k < 3; k++) cyl(g, 0.02, 0.02, 0.06 + k * 0.03, ['#e8b7a8', '#f2f0eb', '#c9a24a'][k], -w * 0.3 + k * 0.06, top, 0.05, { roughness: 0.2 }, 12);
+    },
+    slidingWardrobe(g, w, d, h, c) {
+      box(g, w, h, d, c, 0, 0, 0);
+      const n = w > 1.8 ? 2 : 1;
+      for (let k = 0; k < n; k++) {
+        const dw = w / n, x = -w / 2 + dw * (k + 0.5), z = d / 2 + (k % 2 ? 0.02 : 0.005);
+        box(g, dw - 0.01, h - 0.06, 0.012, '#cfdde3', x, 0.03, z, { metalness: 0.35, roughness: 0.06 });
+        box(g, 0.02, h - 0.06, 0.02, '#9a9a9a', x - dw / 2 + 0.01, 0.03, z + 0.008, METAL);
+      }
+      box(g, w, 0.03, 0.03, '#9a9a9a', 0, h - 0.03, d / 2 + 0.015, METAL);
+    },
+    trunk(g, w, d, h, c) {
+      box(g, w, h * 0.75, d, c, 0, 0, 0, { roughness: 0.7 });
+      const lid = cyl(g, d / 2, d / 2, w, c, 0, 0, 0, { roughness: 0.7 }, 20);
+      lid.rotation.z = Math.PI / 2;
+      lid.scale.set((h * 0.25) / (d / 2), 1, 1); // a low rounded lid
+      lid.position.set(0, h * 0.75, 0);
+      for (const x of [-w * 0.3, w * 0.3]) box(g, 0.04, h * 0.95, d + 0.01, '#5b4636', x, 0, 0, { roughness: 0.5 });
+      box(g, 0.06, 0.08, 0.02, '#c9a24a', 0, h * 0.62, d / 2 + 0.01, METAL);
+    },
+
+    // ---------- laundry, climate, utility ----------
+    dryingRack(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      for (const s of [-1, 1]) for (const z of [-1, 1]) tube(g, [[s * w * 0.35, 0, z * d * 0.45], [s * w * 0.25, h - 0.05, 0]], 0.008, c, METAL);
+      for (let k = -4; k <= 4; k++) { const b = cyl(g, 0.004, 0.004, w, c, 0, 0, 0, METAL, 6); b.rotation.z = Math.PI / 2; b.position.set(0, h - 0.05, k * d * 0.1); }
+      const cols = ['#9fb8c8', '#e8b7a8', '#f2ead8', '#56704f', '#2f4a6b'];
+      for (let k = 0; k < 6; k++) box(g, 0.25 + r() * 0.2, 0.3 + r() * 0.2, 0.01, cols[k % 5], -w / 2 + 0.25 + k * (w - 0.4) / 5, h - 0.5 - r() * 0.1, (k % 2 ? 1 : -1) * d * 0.2, { roughness: 1, side: THREE.DoubleSide });
+    },
+    ironingBoard(g, w, d, h, c) {
+      const top = new THREE.Shape();
+      top.moveTo(-w / 2, -d / 2); top.lineTo(w / 2 - d / 2, -d / 2); top.quadraticCurveTo(w / 2 + d * 0.2, 0, w / 2 - d / 2, d / 2); top.lineTo(-w / 2, d / 2); top.closePath();
+      const geo = new THREE.ExtrudeGeometry(top, { depth: 0.03, bevelEnabled: false });
+      geo.rotateX(Math.PI / 2);
+      add(g, geo, mat(c, { roughness: 1 }), 0, h, 0);
+      for (const s of [-1, 1]) tube(g, [[-w * 0.3, 0, s * d * 0.45], [w * 0.15, h - 0.03, -s * d * 0.3]], 0.01, '#c0c4c6', METAL);
+      box(g, 0.24, 0.07, 0.11, '#3f6fb0', -w * 0.25, h, 0, { roughness: 0.3 });
+      box(g, 0.12, 0.05, 0.03, '#2b2b2b', -w * 0.25, h + 0.07, 0);
+    },
+    vacuum(g, w, d, h, c) {
+      box(g, w, 0.05, 0.08, '#2b2b2b', 0, 0, d * 0.2);
+      tube(g, [[0, 0.05, d * 0.15], [0, h * 0.6, 0], [0, h - 0.05, -d * 0.1]], 0.012, '#c0c4c6', METAL);
+      cyl(g, 0.06, 0.06, 0.28, c, 0, h * 0.5, 0.02, { roughness: 0.3 });
+      box(g, 0.04, 0.12, 0.03, '#2b2b2b', 0, h - 0.12, -d * 0.12);
+    },
+    boiler(g, w, d, h, c) {
+      box(g, w, h, d, c, 0, 0, 0, { roughness: 0.4 });
+      box(g, w * 0.7, 0.1, 0.01, '#3b3f45', 0, h * 0.08, d / 2 + 0.003);
+      box(g, 0.08, 0.03, 0.005, '#7fc7c0', -w * 0.15, h * 0.12, d / 2 + 0.01, { emissive: '#7fc7c0', emissiveIntensity: 0.8 });
+      for (let k = 0; k < 4; k++) cyl(g, 0.012, 0.012, 0.25, '#b08a3c', -w * 0.3 + k * w * 0.2, -0.25, 0, METAL, 8);
+    },
+    airConditioner(g, w, d, h, c) {
+      box(g, w, h, d, c, 0, 0, 0, { roughness: 0.4 });
+      box(g, w - 0.04, 0.04, 0.01, '#d9d6cf', 0, 0.03, d / 2 + 0.003);
+      box(g, 0.05, 0.012, 0.005, '#7fc7c0', w * 0.35, h * 0.55, d / 2 + 0.005, { emissive: '#7fc7c0', emissiveIntensity: 1 });
+    },
+    ceilingFan(g, w, d, h, c) {
+      cyl(g, 0.07, 0.07, 0.03, c, 0, h - 0.03, 0, METAL);
+      cyl(g, 0.012, 0.012, h - 0.2, c, 0, 0.17, 0, METAL, 8);
+      cyl(g, 0.09, 0.07, 0.1, c, 0, 0.08, 0, METAL);
+      for (let k = 0; k < 4; k++) {
+        const a = (k / 4) * Math.PI * 2;
+        const blade = box(g, w / 2 - 0.06, 0.01, 0.12, 'wood:walnut', 0, 0, 0);
+        blade.position.set(Math.cos(a) * (w / 4 + 0.03), 0.12, Math.sin(a) * (w / 4 + 0.03));
+        blade.rotation.y = -a;
+      }
+      ball(g, 0.07, '#fff3d6', 0, 0.05, 0, { emissive: '#ffe6b0', emissiveIntensity: 1.4 }).scale.y = 0.7;
+    },
+    standFan(g, w, d, h, c) {
+      cyl(g, w * 0.4, w * 0.45, 0.03, c, 0, 0, 0);
+      cyl(g, 0.015, 0.015, h - 0.25, c, 0, 0.03, 0, METAL, 8);
+      const head = new THREE.Group();
+      head.position.set(0, h - 0.2, 0);
+      g.add(head);
+      const cage = add(head, new THREE.TorusGeometry(0.19, 0.006, 6, 32), mat(c, METAL));
+      cage.castShadow = false;
+      for (let k = 0; k < 3; k++) { const b = box(head, 0.06, 0.16, 0.01, '#cfe8f2', 0, 0, 0.01, { transparent: true, opacity: 0.6 }); b.geometry.translate(0, 0.08, 0); b.rotation.z = (k / 3) * Math.PI * 2; b.position.y = 0; }
+      cyl(head, 0.06, 0.06, 0.12, c, 0, -0.06, -0.08).rotation.x = Math.PI / 2;
+    },
+
+    // ---------- office ----------
+    lDesk(g, w, d, h, c) {
+      const depth = 0.7;
+      box(g, w, 0.03, depth, c, 0, h - 0.03, -d / 2 + depth / 2);
+      box(g, depth, 0.03, d - depth, c, w / 2 - depth / 2, h - 0.03, depth / 2);
+      for (const [x, z] of [[-w / 2 + 0.03, -d / 2 + 0.03], [-w / 2 + 0.03, -d / 2 + depth - 0.03], [w / 2 - 0.03, d / 2 - 0.03], [w / 2 - depth + 0.03, d / 2 - 0.03], [w / 2 - 0.03, -d / 2 + 0.03]]) box(g, 0.04, h - 0.03, 0.04, '#2b2b2b', x, 0, z, METAL);
+    },
+    filingCabinet(g, w, d, h, c) {
+      box(g, w, h - 0.05, d, c, 0, 0.05, 0);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(g, 0.02, 0.02, 0.05, '#2b2b2b', sx * (w / 2 - 0.04), 0, sz * (d / 2 - 0.05), {}, 10);
+      const n = 3, fh = (h - 0.05) / n;
+      for (let k = 0; k < n; k++) { box(g, w - 0.01, 0.004, 0.004, DARK, 0, 0.05 + k * fh, d / 2 + 0.002); box(g, 0.1, 0.015, 0.02, '#9a9a9a', 0, 0.05 + k * fh + fh - 0.05, d / 2 + 0.01, METAL); }
+    },
+    printer(g, w, d, h, c) {
+      box(g, w, h * 0.8, d, c, 0, 0, 0, { roughness: 0.4 });
+      box(g, w * 0.7, 0.01, d * 0.4, '#ffffff', 0, h * 0.8, -d * 0.1).rotation.x = -0.15;
+      box(g, w * 0.6, 0.005, d * 0.3, '#ffffff', 0, h * 0.35, d / 2 + 0.05);
+      box(g, 0.06, 0.02, 0.005, '#7fc7c0', w * 0.3, h * 0.6, d / 2 + 0.003, { emissive: '#7fc7c0', emissiveIntensity: 0.8 });
+    },
+    // Cork board with notes and photos.
+    pinBoard(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      box(g, w, h, d * 0.6, c, 0, 0, -d / 2 + d * 0.3);
+      box(g, w - 0.04, h - 0.04, 0.004, '#b98c5e', 0, 0.02, -d / 2 + d * 0.6 + 0.002, { roughness: 1 });
+      for (let k = 0; k < 7; k++) {
+        const n = box(g, 0.08 + r() * 0.06, 0.08 + r() * 0.05, 0.002, ['#f2e3b3', '#ffffff', '#e8b7a8', '#9fb8c8'][k % 4], (r() - 0.5) * (w - 0.2), 0.06 + r() * (h - 0.2), -d / 2 + d * 0.6 + 0.006);
+        n.rotation.z = (r() - 0.5) * 0.3;
+        ball(g, 0.007, '#d94a3a', n.position.x, n.position.y + 0.04, n.position.z + 0.004);
+      }
+    },
+
+    // ---------- sport and games ----------
+    treadmill(g, w, d, h, c) {
+      box(g, w * 0.8, 0.12, d, '#2b2b2b', 0, 0, 0);
+      box(g, w * 0.62, 0.01, d - 0.3, '#3b3f45', 0, 0.12, 0.05, { roughness: 1 });
+      for (const s of [-1, 1]) tube(g, [[s * w * 0.4, 0.12, -d / 2 + 0.2], [s * w * 0.42, h - 0.15, -d / 2 + 0.1]], 0.02, c, METAL);
+      box(g, w, 0.18, 0.12, c, 0, h - 0.18, -d / 2 + 0.08, { roughness: 0.4 });
+      box(g, w * 0.4, 0.1, 0.005, '#1d1d1f', 0, h - 0.14, -d / 2 + 0.141, { emissive: '#3fb8a9', emissiveIntensity: 0.4 });
+    },
+    exerciseBike(g, w, d, h, c) {
+      box(g, w * 0.9, 0.05, 0.08, '#2b2b2b', 0, 0, -d * 0.4);
+      box(g, w * 0.9, 0.05, 0.08, '#2b2b2b', 0, 0, d * 0.4);
+      tube(g, [[0, 0.05, d * 0.35], [0, 0.55, 0.05], [0, 0.85, -0.05]], 0.03, c, METAL);
+      tube(g, [[0, 0.05, -d * 0.35], [0, 0.45, -0.1], [0, h - 0.15, -d * 0.3]], 0.03, c, METAL);
+      disc(g, 0.22, 0.05, '#3b3f45', 0, 0.3, -d * 0.2, METAL).rotation.set(0, 0, Math.PI / 2);
+      box(g, 0.2, 0.05, 0.28, '#2b2b2b', 0, 0.88, 0);
+      box(g, w * 0.7, 0.03, 0.03, '#2b2b2b', 0, h - 0.12, -d * 0.32);
+    },
+    dumbbells(g, w, d, h, c) {
+      for (const s of [-1, 1]) box(g, 0.04, h, d * 0.6, '#2b2b2b', s * (w / 2 - 0.02), 0, 0, METAL);
+      for (const [y, z] of [[h * 0.45, d * 0.12], [h - 0.05, -d * 0.1]]) {
+        box(g, w, 0.025, d * 0.35, '#2b2b2b', 0, y - 0.025, z, METAL);
+        for (let k = 0; k < 3; k++) {
+          const x = -w / 2 + 0.12 + k * (w - 0.24) / 2;
+          const bar = cyl(g, 0.012, 0.012, 0.16, '#c0c4c6', 0, 0, 0, METAL, 8);
+          bar.rotation.z = Math.PI / 2; bar.position.set(x, y + 0.04, z);
+          for (const e of [-1, 1]) { const p = cyl(g, 0.035 - k * 0.004, 0.035 - k * 0.004, 0.04, c, 0, 0, 0, { roughness: 0.5 }, 6); p.rotation.z = Math.PI / 2; p.position.set(x + e * 0.07, y + 0.04, z); }
+        }
+      }
+    },
+    poolTable(g, w, d, h, c) {
+      box(g, w, 0.18, d, 'wood:walnut', 0, h - 0.18, 0);
+      box(g, w - 0.16, 0.01, d - 0.16, c, 0, h, 0, { roughness: 1 });
+      for (const sx of [-1, 1]) for (const sz of [-1, 0, 1]) disc(g, 0.04, 0.012, '#1d1d1f', sx * (w / 2 - 0.08), h + 0.002, sz * (d / 2 - 0.08)).rotation.x = 0;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, 0.12, h - 0.18, 0.12, 'wood:walnut', sx * (w / 2 - 0.12), 0, sz * (d / 2 - 0.15));
+      const cols = ['#f2c14e', '#3f6fb0', '#d94a3a', '#8c6bb1', '#e8873c', '#2f6b4f', '#7a2a2a', '#1d1d1f'];
+      cols.forEach((col, k) => ball(g, 0.028, col, (k % 4 - 1.5) * 0.06, h + 0.028, d * 0.2 + Math.floor(k / 4) * 0.055, { roughness: 0.2 }));
+      ball(g, 0.028, '#fbfaf7', 0, h + 0.028, -d * 0.25, { roughness: 0.2 });
+      const cue = cyl(g, 0.008, 0.014, 1.45, 'wood:oak', 0, 0, 0, {}, 8);
+      cue.rotation.x = Math.PI / 2; cue.position.set(w * 0.25, h + 0.03, 0);
+    },
+    pingPong(g, w, d, h, c) {
+      box(g, w, 0.03, d, c, 0, h - 0.03, 0, { roughness: 0.6 });
+      box(g, 0.01, 0.002, d, '#ffffff', 0, h, 0);
+      box(g, w, 0.002, 0.02, '#ffffff', 0, h, d / 2 - 0.01);
+      box(g, w, 0.002, 0.02, '#ffffff', 0, h, -d / 2 + 0.01);
+      box(g, w + 0.1, 0.15, 0.01, '#f4f3ef', 0, h, 0, { transparent: true, opacity: 0.6 });
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, 0.04, h - 0.03, 0.04, '#2b2b2b', sx * (w / 2 - 0.15), 0, sz * (d / 2 - 0.3), METAL);
+    },
+    dartboard(g, w, d, h, c) {
+      const r = Math.min(w, h) / 2, y = h / 2, z = -d / 2;
+      disc(g, r, d * 0.6, '#1d1d1f', 0, y, z + d * 0.3);
+      [[0.95, '#e9d9b5'], [0.62, '#1d1d1f'], [0.58, '#e9d9b5'], [0.15, '#2f6b4f'], [0.07, '#c0392b']].forEach(([k, col], i) => disc(g, r * k * 0.85, 0.004, col, 0, y, z + d * 0.61 + i * 0.002));
+      for (let k = 0; k < 3; k++) { const dart = cyl(g, 0.003, 0.006, 0.12, '#c0c4c6', 0, 0, 0, METAL, 6); dart.rotation.x = Math.PI / 2; dart.position.set((k - 1) * 0.04, y + 0.03 - k * 0.02, z + d + 0.05); }
+    },
+    gameConsole(g, w, d, h, c) {
+      box(g, w, h, d, c, 0, 0, 0, { roughness: 0.3 });
+      box(g, w * 0.5, 0.003, 0.004, '#3fb8a9', 0, h * 0.5, d / 2 + 0.002, { emissive: '#3fb8a9', emissiveIntensity: 1.2 });
+      const pad = ball(g, 0.05, '#2b2b2b', w * 0.7, 0.02, d * 0.2);
+      pad.scale.set(1.4, 0.4, 0.9);
+    },
+    bike(g, w, d, h, c) {
+      const wr = 0.34, zf = d / 2 - wr - 0.02, zb = -d / 2 + wr + 0.02;
+      for (const z of [zf, zb]) {
+        const t = add(g, new THREE.TorusGeometry(wr, 0.02, 8, 32), mat('#1d1d1f'), 0, wr + 0.02, z);
+        t.rotation.y = Math.PI / 2;
+        for (let k = 0; k < 6; k++) box(g, 0.003, wr * 2, 0.003, '#c0c4c6', 0, 0.02, z, METAL).rotation.x = (k / 6) * Math.PI; // spokes
+      }
+      const bb = [0, wr * 0.9, -0.05], seat = [0, h - 0.12, zb + 0.25], head = [0, h - 0.08, zf - 0.15];
+      tube(g, [[0, wr + 0.02, zb], bb], 0.014, c, METAL);
+      tube(g, [bb, seat], 0.016, c, METAL);
+      tube(g, [seat, head], 0.016, c, METAL);
+      tube(g, [bb, head], 0.018, c, METAL);
+      tube(g, [head, [0, wr + 0.02, zf]], 0.014, c, METAL);
+      tube(g, [[0, wr + 0.02, zb], seat], 0.012, c, METAL);
+      box(g, 0.1, 0.04, 0.25, '#2b2b2b', 0, h - 0.1, zb + 0.25);
+      const bar = cyl(g, 0.012, 0.012, w * 0.9, '#2b2b2b', 0, 0, 0, METAL, 8);
+      bar.rotation.z = Math.PI / 2; bar.position.set(0, h, zf - 0.18);
+    },
+
+    // ---------- stairs ----------
+    // Straight stairs climbing from the front (+z) to the back.
+    stairs(g, w, d, h, c) {
+      const n = Math.max(3, Math.round(h / 0.18)), rise = h / n, run = d / n;
+      for (let k = 0; k < n; k++) {
+        const z = d / 2 - run * (k + 0.5);
+        box(g, w, 0.04, run + 0.02, c, 0, rise * (k + 1) - 0.04, z);
+        box(g, w - 0.02, rise - 0.04, 0.015, shade(c, 0.12), 0, rise * k, z + run / 2 - 0.01);
+      }
+      for (const s of [-1, 1]) {
+        const stringer = box(g, 0.05, Math.hypot(h, d), 0.25, shade(c, -0.15), 0, 0, 0);
+        stringer.rotation.x = Math.atan2(d, h);
+        stringer.position.set(s * (w / 2 + 0.025), h / 2 - 0.1, 0);
+      }
+      tube(g, [[w / 2 + 0.03, 0.95, d / 2 - 0.05], [w / 2 + 0.03, h + 0.9, -d / 2 + 0.05]], 0.022, '#2b2b2b', METAL);
+      for (let k = 0; k < n; k += 2) cyl(g, 0.008, 0.008, 0.9, '#2b2b2b', w / 2 + 0.03, rise * (k + 1), d / 2 - run * (k + 0.5), METAL, 6);
+    },
+    spiralStairs(g, w, d, h, c) {
+      const R = Math.min(w, d) / 2, n = Math.max(8, Math.round(h / 0.2)), rise = h / n, step = (Math.PI * 2 * 0.85) / n;
+      cyl(g, 0.05, 0.05, h + 0.9, '#2b2b2b', 0, 0, 0, METAL, 12);
+      const tread = new THREE.Shape();
+      tread.moveTo(0, 0);
+      tread.absarc(0, 0, R, -step / 2 - 0.02, step / 2 + 0.02, false);
+      tread.lineTo(0, 0);
+      const geo = new THREE.ExtrudeGeometry(tread, { depth: 0.04, bevelEnabled: false });
+      geo.rotateX(-Math.PI / 2);
+      const rail = [];
+      for (let k = 0; k < n; k++) {
+        const a = k * step, y = rise * (k + 1) - 0.04;
+        const t = add(g, geo, mat(c, { roughness: 0.6 }), 0, y, 0);
+        t.rotation.y = a;
+        const px = Math.cos(a) * (R - 0.04), pz = -Math.sin(a) * (R - 0.04);
+        cyl(g, 0.008, 0.008, 0.9, '#2b2b2b', px, y + 0.04, pz, METAL, 6);
+        rail.push([px, y + 0.94, pz]);
+      }
+      tube(g, rail, 0.018, '#2b2b2b', METAL);
+    },
+
+    // ---------- more garden ----------
+    hammock(g, w, d, h, c) {
+      const pts = [];
+      for (let k = 0; k <= 16; k++) { const t = k / 16; pts.push([-w / 2 + t * w, 0.08 + Math.sin(Math.PI * t) * 0.02 + (1 - Math.sin(Math.PI * t)) * (h - 0.1), 0]); }
+      for (const s of [-1, 1]) tube(g, pts.map(([x, y]) => [x, y, s * d * 0.45]), 0.03, 'wood:walnut');
+      // The cloth: a few sagging bands side by side.
+      const sag = [];
+      for (let k = 0; k <= 16; k++) { const t = k / 16; sag.push([-w * 0.38 + t * w * 0.76, h * 0.95 - Math.sin(Math.PI * t) * h * 0.55, 0]); }
+      for (let k = -3; k <= 3; k++) tube(g, sag.map(([x, y, z]) => [x, y - (1 - Math.abs(k) / 4) * 0.04 * Math.sin(Math.PI * ((x + w * 0.38) / (w * 0.76))), z + k * d * 0.09]), 0.03, k % 2 ? c : shade(c, -0.1), { roughness: 1 });
+    },
+    swing(g, w, d, h, c) {
+      for (const s of [-1, 1]) for (const z of [-1, 1]) tube(g, [[s * (w / 2 - 0.05), 0, z * d * 0.45], [s * (w / 2 - 0.1), h, 0]], 0.04, 'wood:oak');
+      const beam = cyl(g, 0.05, 0.05, w, 'wood:oak', 0, 0, 0, {}, 10);
+      beam.rotation.z = Math.PI / 2; beam.position.set(0, h, 0);
+      for (const x of [-w * 0.22, w * 0.22]) {
+        for (const s of [-1, 1]) tube(g, [[x + s * 0.2, h, 0], [x + s * 0.2, 0.45, 0]], 0.006, '#9a9a9a', METAL);
+        box(g, 0.45, 0.04, 0.2, c, x, 0.43, 0);
+      }
+    },
+    trampoline(g, w, d, h, c) {
+      const R = Math.min(w, d) / 2, mh = h * 0.35;
+      const ring = add(g, new THREE.TorusGeometry(R, 0.08, 8, 48), mat(c, { roughness: 0.8 }), 0, mh, 0);
+      ring.rotation.x = Math.PI / 2;
+      cyl(g, R - 0.08, R - 0.08, 0.01, '#1d1d1f', 0, mh - 0.01, 0, { roughness: 1 }, 48);
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        tube(g, [[Math.cos(a) * R, 0, Math.sin(a) * R], [Math.cos(a) * R, mh, Math.sin(a) * R]], 0.025, '#5b5f63', METAL);
+        tube(g, [[Math.cos(a) * R, mh, Math.sin(a) * R], [Math.cos(a) * R, h, Math.sin(a) * R]], 0.02, c);
+      }
+      const net = add(g, new THREE.CylinderGeometry(R, R, h - mh, 48, 1, true), mat('#2b2b2b', { transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }), 0, mh + (h - mh) / 2, 0);
+      net.castShadow = false;
+    },
+    // Family car: body, cabin with windows, wheels.
+    car(g, w, d, h, c) {
+      const bodyH = h * 0.45, clear = 0.18;
+      const body = new THREE.Shape();
+      body.moveTo(-d / 2, clear); body.lineTo(d / 2 - 0.15, clear); body.quadraticCurveTo(d / 2, clear, d / 2, clear + 0.2);
+      body.lineTo(d / 2 - 0.05, clear + bodyH); body.lineTo(-d / 2 + 0.1, clear + bodyH); body.quadraticCurveTo(-d / 2, clear + bodyH, -d / 2, clear + bodyH - 0.15); body.closePath();
+      const bgeo = new THREE.ExtrudeGeometry(body, { depth: w - 0.06, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.03, bevelSegments: 2 });
+      bgeo.translate(0, 0, -(w - 0.06) / 2);
+      bgeo.rotateY(-Math.PI / 2);
+      add(g, bgeo, mat(c, { roughness: 0.25, metalness: 0.4 }));
+      const top = clear + bodyH, cabin = new THREE.Shape();
+      cabin.moveTo(-d * 0.3, top); cabin.lineTo(d * 0.22, top); cabin.lineTo(d * 0.08, h); cabin.lineTo(-d * 0.22, h); cabin.closePath();
+      const cgeo = new THREE.ExtrudeGeometry(cabin, { depth: w - 0.2, bevelEnabled: false });
+      cgeo.translate(0, 0, -(w - 0.2) / 2);
+      cgeo.rotateY(-Math.PI / 2);
+      add(g, cgeo, [mat(c, { roughness: 0.25, metalness: 0.4 }), mat('#2a3440', { roughness: 0.1, metalness: 0.3 })]);
+      for (const z of [d / 2 - 0.7, -d / 2 + 0.65]) for (const s of [-1, 1]) {
+        const wh = cyl(g, 0.31, 0.31, 0.2, '#1d1d1f', 0, 0, 0, { roughness: 0.8 }, 24);
+        wh.rotation.z = Math.PI / 2; wh.position.set(s * (w / 2 - 0.1), 0.31, z);
+        const rim = cyl(g, 0.17, 0.17, 0.21, '#c0c4c6', 0, 0, 0, METAL, 16);
+        rim.rotation.z = Math.PI / 2; rim.position.set(s * (w / 2 - 0.1), 0.31, z);
+      }
+      for (const s of [-1, 1]) {
+        box(g, 0.22, 0.08, 0.02, '#fff3d6', s * (w / 2 - 0.25), clear + bodyH - 0.2, d / 2 - 0.01, { emissive: '#fff3d6', emissiveIntensity: 0.6 });
+        box(g, 0.22, 0.07, 0.02, '#c0392b', s * (w / 2 - 0.25), clear + bodyH - 0.15, -d / 2 + 0.01, { emissive: '#c0392b', emissiveIntensity: 0.4 });
+      }
+    },
+    fountain(g, w, d, h, c) {
+      const R = Math.min(w, d) / 2;
+      add(g, new THREE.CylinderGeometry(R, R, 0.4, 32, 1, true), mat(c, { side: THREE.DoubleSide, roughness: 0.9 }), 0, 0.2, 0);
+      const rim = add(g, new THREE.TorusGeometry(R, 0.05, 8, 32), mat(c, { roughness: 0.9 }), 0, 0.4, 0);
+      rim.rotation.x = Math.PI / 2;
+      cyl(g, R - 0.02, R - 0.02, 0.01, '#5aa7c4', 0, 0.32, 0, { roughness: 0.05, transparent: true, opacity: 0.85 }, 32);
+      cyl(g, 0.08, 0.12, h - 0.35, c, 0, 0.32, 0, { roughness: 0.9 }, 16);
+      add(g, new THREE.SphereGeometry(R * 0.45, 24, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mat(c, { side: THREE.DoubleSide, roughness: 0.9 }), 0, h * 0.75, 0);
+      cyl(g, R * 0.42, R * 0.42, 0.01, '#5aa7c4', 0, h * 0.74, 0, { roughness: 0.05 }, 24);
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        tube(g, [[Math.cos(a) * R * 0.42, h * 0.75, Math.sin(a) * R * 0.42], [Math.cos(a) * R * 0.7, h * 0.55, Math.sin(a) * R * 0.7], [Math.cos(a) * R * 0.85, 0.34, Math.sin(a) * R * 0.85]], 0.008, '#bfe6f2', { transparent: true, opacity: 0.6 });
+      }
+      ball(g, 0.05, c, 0, h, 0);
+    },
+    firePit(g, w, d, h, c) {
+      const R = Math.min(w, d) / 2;
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        const s = box(g, R * 0.5, h, 0.12, c, Math.cos(a) * (R - 0.06), 0, Math.sin(a) * (R - 0.06), { roughness: 1 });
+        s.rotation.y = -a + Math.PI / 2;
+      }
+      cyl(g, R - 0.1, R - 0.1, 0.05, '#2b2b2b', 0, 0, 0, {}, 24);
+      for (let k = 0; k < 3; k++) { const l = cyl(g, 0.04, 0.04, R, '#6e4b33', 0, 0, 0, {}, 8); l.rotation.z = Math.PI / 2; l.rotation.y = (k / 3) * Math.PI; l.position.y = 0.1; }
+      for (let k = 0; k < 6; k++) add(g, new THREE.ConeGeometry(0.06, 0.25 + (k % 3) * 0.1, 8), glow(k % 2 ? '#ffb347' : '#ff7b2e', 2.4), Math.cos(k) * 0.08, 0.25, Math.sin(k) * 0.08).castShadow = false;
+    },
+    // Venetian blind over a window.
+    blind(g, w, d, h, c) {
+      box(g, w, 0.05, d, c, 0, h - 0.05, 0);
+      for (let y = 0.02; y < h - 0.06; y += 0.025) { const s = box(g, w - 0.02, 0.002, d * 0.7, c, 0, y, 0.005); s.rotation.x = 0.5; s.castShadow = false; }
+      for (const x of [-w * 0.3, w * 0.3]) box(g, 0.004, h - 0.05, 0.004, '#d9d6cf', x, 0, d * 0.2);
+      box(g, w - 0.02, 0.02, d * 0.8, c, 0, 0, 0);
+    },
+
     // ---------- plants ----------
     flowers(g, w, d, h, c, it) {
       const r = mulberry(seedOf(it));

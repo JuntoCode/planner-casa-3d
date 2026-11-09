@@ -9,6 +9,7 @@ import { createWizard } from './wizard.js';
 import * as G from './geometry.js';
 import * as Plan from './plan.js';
 import { createWalker } from './walk.js';
+import { artTexture } from './art.js';
 
 // State values are in centimeters; the 3D scene works in meters (cm / 100).
 // The plan is a graph of walls (see plan.js); rooms are found from it.
@@ -40,7 +41,8 @@ const getItem = id => state.items.find(i => i.id === id);
 const getWall = id => state.walls.find(w => w.id === id);
 const getRoom = id => rooms.find(r => r.id === id);
 const isOpening = it => TYPES[it.type].opening;
-const isDoor = it => ['door', 'arch'].includes(TYPES[it.type].build);
+const DOOR_BUILDS = new Set(['door', 'arch', 'pocketDoor', 'doubleDoor', 'frontDoor', 'garageDoor']);
+const isDoor = it => DOOR_BUILDS.has(TYPES[it.type].build);
 const fmtM = cm => (cm / 100).toFixed(2).replace('.', ',');
 const m2 = a => (a / 10000).toFixed(1).replace('.', ',');
 const lowWalls = () => wallMode === 'low' && !walking;
@@ -309,7 +311,7 @@ function clearGroup(g, keepMaterials = false) {
   g.traverse(o => {
     if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose();
     if (!keepMaterials && o.material) {
-      for (const m of [].concat(o.material)) if (!m.userData.shared) { m.map?.dispose(); m.dispose(); }
+      for (const m of [].concat(o.material)) if (!m.userData.shared) { if (!m.userData.sharedMap) m.map?.dispose(); m.dispose(); }
     }
   });
   while (g.children.length) g.remove(g.children[0]);
@@ -521,24 +523,38 @@ function rebuildWalls() {
       buildRailing(g, w, o, H);
       continue;
     }
-    // Solid wall, made of pieces around its doors and windows.
-    const mats = [new THREE.MeshStandardMaterial({ color: '#4f565e', roughness: 0.9 }), new THREE.MeshStandardMaterial({ color: '#f4f2ee', roughness: 0.92 })];
-    g.userData.mats = mats;
-    const add = pts => {
-      const m = new THREE.Mesh(pts.geo, mats);
+    // Solid wall, made of pieces around its doors and windows. Each piece is two halves,
+    // so each side shows the finish of the room it faces.
+    const cap = new THREE.MeshStandardMaterial({ color: '#4f565e', roughness: 0.9 });
+    const mid = pathMid(o.path);
+    const sideOf = s => {
+      const p0 = o.path[Math.max(0, Math.floor(o.path.length / 2) - 1)], p1 = o.path[Math.floor(o.path.length / 2)];
+      const nn = G.left(G.norm(G.sub(p1, p0)));
+      return wallSideMat(roomAt({ x: mid[0] + nn[0] * s * (o.h + 6), z: mid[1] + nn[1] * s * (o.h + 6) }));
+    };
+    const matL = sideOf(1), matR = sideOf(-1);
+    g.userData.mats = [cap, matL, matR];
+    const add = (geo, side) => {
+      const m = new THREE.Mesh(geo, [cap, side]);
       m.castShadow = m.receiveShadow = true;
       g.add(m);
     };
-    if (Plan.isCurved(w)) { add({ geo: prism([...o.L, ...[...o.R].reverse()], 0, H) }); continue; }
+    if (Plan.isCurved(w)) {
+      add(prism([...o.L, ...[...o.path].reverse()], 0, H), matL);
+      add(prism([...o.path, ...[...o.R].reverse()], 0, H), matR);
+      continue;
+    }
     const len = G.dist(A, B), d = G.norm(G.sub(B, A)), n = G.left(d);
     const at = (t, side) => {
+      if (side === 0) return G.add(A, G.mul(d, Math.min(Math.max(t, 0), len)));
       if (t <= 0.01) return side > 0 ? o.L[0] : o.R[0];
       if (t >= len - 0.01) return side > 0 ? o.L[o.L.length - 1] : o.R[o.R.length - 1];
       return G.add(A, G.add(G.mul(d, t), G.mul(n, side * o.h)));
     };
     const piece = (t0, t1, y0, y1) => {
       if (t1 - t0 < 0.5 || y1 - y0 < 0.5) return;
-      add({ geo: prism([at(t0, 1), at(t1, 1), at(t1, -1), at(t0, -1)], y0, y1) });
+      add(prism([at(t0, 1), at(t1, 1), at(t1, 0), at(t0, 0)], y0, y1), matL);
+      add(prism([at(t0, 0), at(t1, 0), at(t1, -1), at(t0, -1)], y0, y1), matR);
     };
     const ops = state.items.filter(it => it.wall === w.id)
       .map(it => ({ s: Math.max(0, it.t - it.w / 2), e: Math.min(len, it.t + it.w / 2), y0: it.elev, y1: it.elev + it.h }))
@@ -553,6 +569,44 @@ function rebuildWalls() {
     }
     piece(cur, len, 0, H);
   }
+}
+
+// ---------- wall finishes (per room) ----------
+const WALL_FINISHES = {
+  paint: { label: 'Pittura' },
+  stripes: { label: 'Carta da parati a righe', tex: 'wpStripes', size: 0.6 },
+  damask: { label: 'Carta da parati damascata', tex: 'wpDamask', size: 0.7 },
+  botanical: { label: 'Carta da parati botanica', tex: 'wpBotanical', size: 0.9 },
+  deco: { label: 'Carta da parati art déco', tex: 'wpGeo', size: 0.5 },
+  brick: { label: 'Mattoni a vista', tex: 'brick', size: 0.8 },
+  wood: { label: 'Boiserie in legno', tex: 'woodPanel', size: 1 },
+  concrete: { label: 'Cemento', tex: 'concreteWall', size: 1.2 },
+  subway: { label: 'Piastrelle diamantate', tex: 'subway', size: 0.6 },
+  hexTiles: { label: 'Piastrelle esagonali', tex: 'wallHex', size: 0.6 },
+  mosaic: { label: 'Mosaico', tex: 'wallMosaic', size: 0.6 },
+};
+const WALL_COLORS = ['#f4f2ee', '#ffffff', '#ece4d6', '#e6d3c3', '#e8c4b8', '#c9d6c3', '#a9b8a0', '#56704f',
+  '#b9c9d6', '#7d97ad', '#2f4a6b', '#d9b44a', '#c56b45', '#9b5c7a', '#5b5f63', '#3b3f45'];
+const DEFAULT_WALL = '#f4f2ee';
+
+const wallTextures = new Map();
+function wallTexture(f) {
+  if (!wallTextures.has(f.tex)) {
+    const t = artTexture(f.tex).clone(); // same picture, its own repeat (1 texture = f.size meters)
+    t.repeat.set(1 / f.size, 1 / f.size);
+    t.needsUpdate = true;
+    wallTextures.set(f.tex, t);
+  }
+  return wallTextures.get(f.tex);
+}
+
+// Material for the side of a wall facing `room` (its own copy: walls fade one by one).
+function wallSideMat(room) {
+  const f = WALL_FINISHES[room?.meta.wallFinish] || WALL_FINISHES.paint;
+  const color = room?.meta.wallColor || (f.tex ? '#ffffff' : DEFAULT_WALL);
+  const m = new THREE.MeshStandardMaterial({ color, roughness: f.tex === 'subway' || f.tex === 'wallMosaic' ? 0.35 : 0.92, map: f.tex ? wallTexture(f) : null });
+  m.userData.sharedMap = true;
+  return m;
 }
 
 // IKEA-style cutaway: walls between the camera and the middle of the home fade out.
@@ -2070,6 +2124,13 @@ function renderProps() {
       <label class="field"><span>Pavimento</span><select data-k="floor">
         ${Object.entries(FLOORS).map(([k, v]) => `<option value="${k}"${k === m.floor ? ' selected' : ''}>${v}</option>`).join('')}
       </select></label>
+      ${Plan.OUTDOOR.has(m.type) ? '' : `<label class="field"><span>Pareti</span><select data-k="wallFinish">
+        ${Object.entries(WALL_FINISHES).map(([k, v]) => `<option value="${k}"${k === (m.wallFinish || 'paint') ? ' selected' : ''}>${v.label}</option>`).join('')}
+      </select></label>
+      <div class="field"><span>Colore pareti</span><div class="swatches">
+        ${WALL_COLORS.map(c => `<button class="sw${c === (m.wallColor || DEFAULT_WALL) ? ' on' : ''}" data-wcolor="${c}" style="background:${c}" title="${c}"></button>`).join('')}
+        <input type="color" data-k="wallColor" value="${m.wallColor || DEFAULT_WALL}" title="Colore personalizzato">
+      </div></div>`}
       <p class="hint">Trascina il pavimento per spostare la stanza, i muri o i pallini per cambiarne la forma. Clicca una misura per scriverla.</p>
       <div class="actions"><button data-act="del" class="danger">Elimina stanza</button></div>`;
   }
@@ -2104,6 +2165,9 @@ function applyProp(k, raw, live = false) {
     const m = getRoom(selection.id).meta;
     if (k === 'name') { m.name = raw.trim() || 'Stanza'; m.autoName = !raw.trim(); }
     if (k === 'floor') { m.floor = raw; m.autoFloor = false; }
+    if (k === 'wallFinish') m.wallFinish = WALL_FINISHES[raw] ? raw : 'paint';
+    if (k === 'wallColor') m.wallColor = /^#[0-9a-f]{6}$/i.test(raw) ? raw : null;
+    if (k === 'wallFinish' || k === 'wallColor') rebuildWalls();
     if (k === 'type') {
       if (raw === 'auto') { m.autoType = true; }
       else { m.type = raw; m.autoType = false; }
@@ -2143,6 +2207,7 @@ $('#props').addEventListener('click', e => {
   } else if (b.dataset.act === 'round') confirmCorner(parseFloat($('#props input[type=number][data-k=radius]').value));
   else if (b.dataset.rot) rotateSelection(+b.dataset.rot);
   else if (b.dataset.color) applyProp('color', b.dataset.color);
+  else if (b.dataset.wcolor) applyProp('wallColor', b.dataset.wcolor);
   else if (b.dataset.rstyle) {
     getWall(selection.id).style = b.dataset.rstyle;
     rebuildGeometry(); // garden, patio or terrace depends on the style
