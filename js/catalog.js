@@ -533,8 +533,8 @@ export const CATALOG = [
     { type: 'bike', name: 'Bicicletta', build: 'bike', w: 60, d: 175, h: 100, color: '#3f6fb0' },
   ] },
   { cat: 'Scale', items: [
-    { type: 'stairs', name: 'Scala dritta', build: 'stairs', w: 90, d: 300, h: 270, color: 'wood:oak' },
-    { type: 'spiralStairs', name: 'Scala a chiocciola', build: 'spiralStairs', w: 160, d: 160, h: 270, color: 'wood:oak' },
+    { type: 'stairs', name: 'Scala dritta', build: 'stairs', w: 90, d: 300, h: 270, color: 'wood:oak', toNextFloor: true },
+    { type: 'spiralStairs', name: 'Scala a chiocciola', build: 'spiralStairs', w: 160, d: 160, h: 270, color: 'wood:oak', toNextFloor: true },
   ] },
   { cat: 'Ingresso', items: [
     { type: 'shoeCabinet', name: 'Scarpiera', build: 'shoeCabinet', w: 80, d: 26, h: 110, color: '#f2f0eb', surface: true },

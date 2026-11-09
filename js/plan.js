@@ -22,6 +22,7 @@ export const ROOM_TYPES = {
   balcony: { label: 'Balcone', floor: 'cotto' },
   garden: { label: 'Giardino', floor: 'grass' },
   patio: { label: 'Patio', floor: 'stone' },
+  stairwell: { label: 'Vano scala', floor: 'concrete' }, // open void on an upper floor
   other: { label: 'Stanza', floor: 'parquet' },
 };
 

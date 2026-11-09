@@ -383,10 +383,22 @@ label.wz-row { cursor: pointer; }
   .status { top: 8px; font-size: 12px; }
   #newBtn { padding: 6px 8px; }
   .tools button { min-width: 0; padding: 7px 8px; }
-  #envMode, #wallMode, #levelMode { max-width: 92px; padding: 6px 4px; }
+  #envMode, #wallMode, #levelMode, #floorSel { max-width: 92px; padding: 6px 4px; }
   .tools button span { display: none; }
   .draw-hint { bottom: 12px; max-width: calc(100% - 80px); left: calc(50% + 28px); }
   .wz-body { grid-template-columns: 1fr; }
   .wz-svg { min-height: 200px; }
   .coach { flex-wrap: wrap; }
 }
+
+/* floors */
+.rows.floors li { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.rows.floors li input { flex: 1; min-width: 0; border: 1px solid transparent; background: transparent; font: inherit; padding: 4px 6px; border-radius: 6px; }
+.rows.floors li input:focus { border-color: var(--line, #d0d5db); background: #fff; }
+.rows.floors .floor-num { font-style: normal; font-weight: 700; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: #e7ebf0; font-size: 12px; }
+.rows.floors li.on .floor-num { background: var(--accent); color: #fff; }
+.floor-add { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.floor-add button { flex: 1; font-size: 12px; }
+#floorSel { min-width: 0; }
+@media (min-width: 821px) { #floorSel { max-width: 150px; } }
+.topbar .seg { flex-shrink: 0; }

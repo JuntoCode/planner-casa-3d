@@ -58,6 +58,12 @@ senza build: HTML, CSS e JavaScript modules.
   alla casa, *Patio* un cordolo per una zona pavimentata. In giardino: alberi, ulivo, cipresso,
   cespugli, aiuole, lavanda, orto, piscina, pergola, ombrellone, lettino, barbecue, panchina,
   lampione, casetta degli attrezzi, cuccia del cane, amaca, altalena, tappeto elastico, braciere, fontana, auto.
+- **Piani**: casa su più livelli. Dal menu in alto o dalla scheda *Pianta* scegli il piano da modificare,
+  ne aggiungi uno sopra (vuoto o con gli stessi muri e finestre di quello sotto), lo rinomini o lo elimini.
+  In 3D vedi i piani sotto quello che modifichi, con il solaio; in pianta il piano sotto resta velato come
+  traccia. Per la scala: metti una *Scala* al piano di sotto e al piano di sopra chiudi il buco con una
+  ringhiera: diventa un vano scala aperto, con il buco anche nel soffitto di sotto. Camminando `PagSu` /
+  `PagGiù` cambiano piano.
 - **Pareti**: per ogni stanza colore e finitura (pittura, carte da parati a righe, damascata, botanica,
   art déco, mattoni a vista, boiserie, cemento, piastrelle); ogni lato del muro segue la sua stanza.
 - **Pavimenti**: parquet, spina di pesce, marmo, gres, scacchiera, esagonette, cementine, mosaico,

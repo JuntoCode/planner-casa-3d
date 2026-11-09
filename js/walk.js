@@ -12,7 +12,7 @@ const RUN = 300;        // cm/s with Shift
 const TURN = 1.8;       // rad/s with the left/right arrows
 const LOOK = 0.0024;    // rad per pixel of mouse movement
 
-export function createWalker({ canvas, camera, colliders, onExit, onUse }) {
+export function createWalker({ canvas, camera, colliders, onExit, onUse, baseY = () => 0, onFloor }) {
   let active = false;
   let pos = [0, 0];
   let yaw = 0, pitch = 0;
@@ -24,7 +24,7 @@ export function createWalker({ canvas, camera, colliders, onExit, onUse }) {
   let down = null;        // where a click or tap started, to tell it from a drag
 
   function apply() {
-    camera.position.set(pos[0] / 100, EYE, pos[1] / 100);
+    camera.position.set(pos[0] / 100, baseY() + EYE, pos[1] / 100);
     camera.rotation.set(pitch, yaw, 0, 'YXZ');
   }
 
@@ -96,6 +96,7 @@ export function createWalker({ canvas, camera, colliders, onExit, onUse }) {
     if (!active || e.target.closest?.('input, select, textarea, dialog')) return;
     if (e.code === 'Escape') { if (!document.pointerLockElement) onExit(); return; }
     if (e.code === 'KeyE' || e.code === 'KeyF') { e.preventDefault(); if (!e.repeat) onUse?.(); return; }
+    if (e.code === 'PageUp' || e.code === 'PageDown') { e.preventDefault(); if (!e.repeat) onFloor?.(e.code === 'PageUp' ? 1 : -1); return; }
     if (MOVE_KEYS.includes(e.code)) { keys.add(e.code); e.preventDefault(); }
   }
   function onKeyUp(e) { keys.delete(e.code); }

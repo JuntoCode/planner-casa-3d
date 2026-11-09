@@ -48,6 +48,12 @@ const m2 = a => (a / 10000).toFixed(1).replace('.', ',');
 const lowWalls = () => wallMode === 'low' && !walking;
 const wallTopOf = w => Math.min(Plan.wallHeight(state, w), lowWalls() ? 45 : Infinity);
 
+// A project has shared settings (name, wall height…) and one or more floors. The floor being
+// edited keeps its plan at the top level (state.nodes, walls, rooms, items) so the whole editor
+// works on it unchanged; the other floors wait in state.floors[i].data.
+const FLOOR_KEYS = ['nodes', 'walls', 'rooms', 'items'];
+const SLAB = 30; // cm of floor between two storeys
+
 function normalize(d) {
   d = d && typeof d === 'object' ? d : {};
   const s = Array.isArray(d.walls) && Array.isArray(d.nodes)
@@ -60,12 +66,32 @@ function normalize(d) {
     snap: +s.snap || 5,
     env: ENVIRONMENTS[s.env ?? d.env] ? (s.env ?? d.env) : 'country',
     level: LEVELS[s.level ?? d.level] ? +(s.level ?? d.level) : 0, // city: 0 = detached house, else floor
+  };
+  Object.assign(out, normalizePlan(s, out));
+  // Floors: older projects have just one.
+  const list = Array.isArray(d.floors) && d.floors.length ? d.floors : [{ name: 'Piano terra' }];
+  out.floor = Math.min(Math.max(0, Math.round(+d.floor || 0)), list.length - 1);
+  out.floors = list.map((f, i) => ({
+    id: String(f.id || 'f' + i + newId()),
+    name: String(f.name || floorName(i)),
+    data: i === out.floor || !f.data ? null : normalizePlan(f.data, out),
+  }));
+  for (const [i, f] of out.floors.entries()) if (i !== out.floor && !f.data) f.data = { nodes: [], walls: [], rooms: [], items: [] };
+  return out;
+}
 
-    nodes: s.nodes.filter(n => isFinite(n.x) && isFinite(n.z)).map(n => ({ id: String(n.id), x: +n.x, z: +n.z })),
+const floorName = i => (i === 0 ? 'Piano terra' : `${i}° piano`);
+
+// One floor's plan, cleaned up. `set` gives the shared settings (wall thickness…).
+function normalizePlan(s, set) {
+  const out = {
+    ...set,
+    nodes: (s.nodes || []).filter(n => isFinite(n.x) && isFinite(n.z)).map(n => ({ id: String(n.id), x: +n.x, z: +n.z })),
     walls: [],
     rooms: (s.rooms || []).map(m => ({ ...Plan.newMeta(), ...m, type: Plan.ROOM_TYPES[m.type] ? m.type : 'other', floor: FLOORS[m.floor] ? m.floor : 'parquet' })),
     items: [],
   };
+  s.walls ||= [];
   const ids = new Set(out.nodes.map(n => n.id));
   out.walls = s.walls.filter(w => ids.has(w.a) && ids.has(w.b)).map(w => ({
     id: String(w.id), a: w.a, b: w.b, type: Plan.WALL_TYPES[w.type] ? w.type : 'wall',
@@ -86,7 +112,7 @@ function normalize(d) {
   }).filter(it => !TYPES[it.type].opening || out.walls.some(w => w.id === it.wall));
   Plan.cleanup(out);
   Plan.syncOpenings(out);
-  return out;
+  return { nodes: out.nodes, walls: out.walls, rooms: out.rooms, items: out.items };
 }
 
 function save() {
@@ -110,6 +136,7 @@ function loadBackup() {
 
 function refreshRooms(prune = false) {
   rooms = Plan.syncRooms(state, prune);
+  markStairwells(rooms, state.floor);
 }
 
 function commit() {
@@ -207,6 +234,13 @@ const indoorLight = new THREE.AmbientLight('#fff8ee', 1.1);
 indoorLight.visible = false;
 scene.add(indoorLight);
 scene.add(floorsG, wallsG, itemsG, overlayG, handlesG, hoverG, drawG, ceilingsG);
+const otherFloorsG = new THREE.Group(); // the floors you are not editing, built once per switch
+scene.add(otherFloorsG);
+// In the floor plan of an upper storey, a light veil keeps the floors below as a faint guide.
+const veil = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: '#f4f6f8', transparent: true, opacity: 0.72, depthWrite: false }));
+veil.rotation.x = -Math.PI / 2;
+veil.visible = false;
+scene.add(veil);
 const itemObjs = new Map();
 
 const persp = new THREE.PerspectiveCamera(45, 1, 0.05, 700);
@@ -259,15 +293,16 @@ function fitView() {
   const b = bounds();
   if (camera === persp) {
     const s = Math.max(b.w, b.d, 3);
-    controls.target.set(b.cx, 0, b.cz);
-    persp.position.set(b.cx + s * 0.25, s * 0.95 + 1.5, b.cz + s * 0.95 + 1.5);
+    const y = floorElev(state.floor) / 100;
+    controls.target.set(b.cx, y, b.cz);
+    persp.position.set(b.cx + s * 0.25, y + s * 0.95 + 1.5, b.cz + s * 0.95 + 1.5);
   } else {
     const a = viewport.clientWidth / Math.max(1, viewport.clientHeight);
     orthoHalf = Math.max(b.d / 2, b.w / 2 / a, 2) * 1.15 + 0.5;
     ortho.zoom = 1;
     updateOrtho();
-    ortho.position.set(b.cx, 50, b.cz + 0.001);
-    controls.target.set(b.cx, 0, b.cz);
+    ortho.position.set(b.cx, 60, b.cz + 0.001);
+    controls.target.set(b.cx, floorElev(state.floor) / 100, b.cz);
   }
   controls.update();
 }
@@ -285,6 +320,7 @@ function setView(v) {
   } else fitView();
   document.querySelectorAll('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   sun.castShadow = v !== '2d'; // shadows only clutter the floor plan
+  placeActiveFloor();
   updateEnv();
   updateOverlay();
 }
@@ -323,6 +359,13 @@ const shapeOf = (pts, holes = []) => {
   return s;
 };
 
+function prismWithHoles(pts, holes, y0, y1) {
+  const g = new THREE.ExtrudeGeometry(shapeOf(pts, holes || []), { depth: Math.max(0.001, (y1 - y0) / 100), bevelEnabled: false });
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, y0 / 100, 0);
+  return g;
+}
+
 // Extrude a footprint (cm, [x, z]) between two heights. Material 0 = top/bottom, 1 = sides.
 function prism(pts, y0, y1) {
   const g = new THREE.ExtrudeGeometry(shapeOf(pts), { depth: Math.max(0.001, (y1 - y0) / 100), bevelEnabled: false });
@@ -331,9 +374,20 @@ function prism(pts, y0, y1) {
   return g;
 }
 
+const slabMats = [new THREE.MeshStandardMaterial({ color: '#d9d6cf', roughness: 1 }), new THREE.MeshStandardMaterial({ color: '#e9e6df', roughness: 1 })];
+slabMats.forEach(m => { m.userData.shared = true; });
+
 function rebuildRooms() {
   clearGroup(floorsG);
+  const level = buildLevel ?? state.floor;
   for (const r of rooms) {
+    if (r.meta.type === 'stairwell') continue; // an open void: no floor
+    if (level > 0) {
+      // The storey's own slab, seen from outside and from the floor below.
+      const slab = new THREE.Mesh(prismWithHoles(r.pts, r.holes, -SLAB, 0), slabMats);
+      slab.receiveShadow = slab.castShadow = true;
+      floorsG.add(slab);
+    }
     const tex = floorTexture(r.meta.floor).clone();
     tex.repeat.set(1 / TILE_M, 1 / TILE_M);
     tex.needsUpdate = true;
@@ -359,10 +413,17 @@ const ceilingMat = new THREE.MeshStandardMaterial({ color: '#fbfaf7', roughness:
 ceilingMat.userData.shared = true;
 function rebuildCeilings() {
   clearGroup(ceilingsG);
+  const level = buildLevel ?? state.floor;
+  // Stairwells of the floor above open the ceiling.
+  const voids = level + 1 < state.floors.length ? floorRooms(level + 1).filter(r => r.meta.type === 'stairwell') : [];
   for (const r of rooms) {
-    if (Plan.OUTDOOR.has(r.meta.type)) continue;
+    if (Plan.OUTDOOR.has(r.meta.type) || r.meta.type === 'stairwell') continue;
     // Facing down: shape in (x, z) and turned +90° so its normal points to the floor.
     const shape = new THREE.Shape(r.pts.map(([x, z]) => new THREE.Vector2(x / 100, z / 100)));
+    for (const v of voids) {
+      const p = G.pole(v.pts);
+      if (G.inRoom(p[0], p[1], r)) shape.holes.push(new THREE.Path(v.pts.map(([x, z]) => new THREE.Vector2(x / 100, z / 100))));
+    }
     const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), ceilingMat);
     m.rotation.x = Math.PI / 2;
     m.position.y = state.wallH / 100 - 0.005;
@@ -823,7 +884,11 @@ function walkColliders() {
   return { segs, boxes };
 }
 
-const walker = createWalker({ canvas, camera: walkCam, colliders: walkColliders, onExit: () => setView('3d'), onUse: useAt });
+const walker = createWalker({
+  canvas, camera: walkCam, colliders: walkColliders, onExit: () => setView('3d'), onUse: useAt,
+  baseY: () => floorElev(state.floor) / 100,
+  onFloor: step => switchFloor(state.floor + step),
+});
 
 function enterWalk() {
   if (walking) return;
@@ -852,6 +917,8 @@ function enterWalk() {
   ceilingsG.visible = true;
   indoorLight.visible = true;
   updateEnv(); // apartments: the floors above appear
+  rebuildOtherFloors(); // the storeys above appear too
+  placeActiveFloor();
   openings.clear(); // doors and windows start closed
   aimId = null;
   rebuildWalls();
@@ -869,6 +936,8 @@ function exitWalk() {
   ceilingsG.visible = false;
   indoorLight.visible = false;
   updateEnv();
+  rebuildOtherFloors();
+  placeActiveFloor();
   rebuildWalls();
   rebuildItems();
   updateOverlay();
@@ -897,6 +966,8 @@ function refreshItemQuiet(it) {
 
 function rebuildAll() {
   Plan.syncOpenings(state);
+  rebuildOtherFloors(false);
+  placeActiveFloor();
   refreshRooms();
   rebuildRooms();
   rebuildWalls();
@@ -907,8 +978,156 @@ function rebuildAll() {
   renderPlanTab();
   renderList();
   $('#projectName').value = state.name;
+  renderFloorSelect();
   $('#envMode').value = state.env;
   $('#levelMode').value = String(state.level);
+}
+
+// ---------- floors ----------
+
+const floorElev = i => i * (state.wallH + SLAB); // cm from the ground to storey i's floor
+let buildLevel = null;   // set while another floor is being built in place of the active one
+let activeStash = null;  // the active floor's plan while another one is swapped in
+
+const planOf = i => (i === state.floor ? activeStash || state : state.floors[i].data);
+
+// Rooms of any floor, worked out on a copy (nothing is swapped).
+function floorRooms(i) {
+  const pl = planOf(i);
+  if (!pl) return [];
+  const st = { wallH: state.wallH, wallT: state.wallT, ...structuredClone({ nodes: pl.nodes, walls: pl.walls, rooms: pl.rooms, items: pl.items }) };
+  return Plan.syncRooms(st, false);
+}
+
+// On an upper floor, an area closed by railings over the rooms below is a stairwell, not a terrace.
+function markStairwells(list, level) {
+  if (level <= 0) return;
+  const cands = list.filter(r => r.meta.autoType && ['terrace', 'balcony'].includes(r.meta.type));
+  if (!cands.length) return;
+  const below = floorRooms(level - 1).filter(r => !Plan.OUTDOOR.has(r.meta.type));
+  for (const r of cands) {
+    const p = r.meta.anchor || G.pole(r.pts, r.holes);
+    if (!below.some(b => G.inRoom(p[0], p[1], b))) continue;
+    r.meta.type = 'stairwell';
+    if (r.meta.autoName) r.meta.name = Plan.ROOM_TYPES.stairwell.label;
+    if (r.meta.autoFloor) r.meta.floor = Plan.ROOM_TYPES.stairwell.floor;
+  }
+}
+
+// Put floor i's plan in place of the active one while fn runs (to build it with the same code).
+function withFloor(i, fn) {
+  if (i === state.floor) return fn();
+  const keep = {};
+  for (const k of FLOOR_KEYS) keep[k] = state[k];
+  const keepRooms = rooms;
+  activeStash = keep;
+  Object.assign(state, state.floors[i].data);
+  buildLevel = i;
+  rooms = Plan.syncRooms(state, false);
+  markStairwells(rooms, i);
+  try { return fn(); } finally {
+    Object.assign(state, keep);
+    rooms = keepRooms;
+    buildLevel = null;
+    activeStash = null;
+  }
+}
+
+// The floors below (and, while walking, above) the active one, as plain scenery.
+// They are built with the same code as the active floor, so its groups are rebuilt after
+// (`restoreActive` false: the caller rebuilds them itself).
+function rebuildOtherFloors(restoreActive = true) {
+  clearGroup(otherFloorsG);
+  for (let i = 0; i < state.floors.length; i++) {
+    if (i === state.floor || (i > state.floor && !walking)) continue;
+    const g = new THREE.Group();
+    g.position.y = floorElev(i) / 100;
+    withFloor(i, () => {
+      rebuildRooms();
+      rebuildWalls();
+      rebuildItems();
+      for (const src of [floorsG, wallsG, itemsG]) {
+        for (const c of [...src.children]) { src.remove(c); if (!c.isCSS2DObject) g.add(c); }
+      }
+      if (walking) { for (const c of [...ceilingsG.children]) { ceilingsG.remove(c); g.add(c); } }
+      else clearGroup(ceilingsG);
+    });
+    otherFloorsG.add(g);
+  }
+  itemObjs.clear();
+  if (restoreActive) { rebuildRooms(); rebuildWalls(); rebuildItems(); }
+}
+
+// Lift everything that belongs to the active floor to its height.
+function placeActiveFloor() {
+  const y = floorElev(state.floor) / 100;
+  for (const g of [floorsG, wallsG, itemsG, overlayG, handlesG, hoverG, drawG, ceilingsG]) g.position.y = y;
+  floorPlane.constant = -y;
+  veil.position.y = y - 0.03;
+  veil.visible = camera === ortho && state.floor > 0 && !walking;
+}
+
+// Switch the floor being edited (the view follows it up or down).
+function switchFloor(i) {
+  if (i < 0 || i >= state.floors.length || i === state.floor) return;
+  const dy = (floorElev(i) - floorElev(state.floor)) / 100;
+  const cur = {};
+  for (const k of FLOOR_KEYS) cur[k] = state[k];
+  state.floors[state.floor].data = cur;
+  Object.assign(state, state.floors[i].data);
+  state.floors[i].data = null;
+  state.floor = i;
+  selection = null;
+  cornerPreview = null;
+  draw = null;
+  if (walking) openings.clear();
+  rebuildAll();
+  if (!walking && camera === persp) { persp.position.y += dy; controls.target.y += dy; controls.update(); }
+  if (!walking && camera === ortho) controls.target.y = floorElev(i) / 100;
+  walker.refresh();
+  updateOverlay();
+  commit();
+}
+
+// New floor on top: an empty one or a copy of the walls of the floor below it.
+function addFloor(copyWalls) {
+  const n = state.floors.length;
+  const top = planOf(n - 1);
+  const data = { nodes: [], walls: [], rooms: [], items: [] };
+  if (copyWalls) {
+    const walls = top.walls.filter(w => w.type === 'wall');
+    const used = new Set(walls.flatMap(w => [w.a, w.b]));
+    data.nodes = structuredClone(top.nodes.filter(nd => used.has(nd.id)));
+    data.walls = structuredClone(walls);
+    // Windows stay where they were; doors are left out (rooms upstairs differ).
+    data.items = structuredClone(top.items.filter(it => it.wall && walls.some(w => w.id === it.wall) && !isDoor(it) && TYPES[it.type].build !== 'slider' && !['balcony', 'balcony1'].includes(it.type)));
+  }
+  state.floors.push({ id: 'f' + newId(), name: floorName(n), data });
+  switchFloor(n);
+  toast(copyWalls ? `${floorName(n)}: ho copiato muri e finestre del piano sotto, modificali come vuoi.` : `${floorName(n)} aggiunto: disegna i muri.`);
+}
+
+function deleteFloor(i) {
+  if (state.floors.length < 2) { toast('La casa deve avere almeno un piano.'); return; }
+  if (!confirm(`Eliminare "${state.floors[i].name}" con tutto quello che contiene? (Puoi annullare con Ctrl+Z)`)) return;
+  if (i === state.floor) {
+    const j = i > 0 ? i - 1 : 1;
+    Object.assign(state, state.floors[j].data);
+    state.floors[j].data = null;
+    state.floor = j;
+  }
+  state.floors.splice(i, 1);
+  if (state.floor > i) state.floor--;
+  selection = null;
+  rebuildAll();
+  fitView();
+  commit();
+}
+
+function renderFloorSelect() {
+  const sel = $('#floorSel');
+  sel.innerHTML = state.floors.map((f, i) => `<option value="${i}"${i === state.floor ? ' selected' : ''}>${esc(f.name)}</option>`).join('')
+    + '<option value="add">+ Aggiungi piano…</option>';
 }
 
 // ---------- collisions + overlay ----------
@@ -1787,6 +2006,7 @@ function addItem(type, at) {
   const t = TYPES[type];
   const it = { id: newId(), type, x: 0, z: 0, rot: 0, w: t.w, d: t.d, h: t.h, elev: t.elev, color: t.color };
   if (t.ceiling) it.elev = Math.max(0, state.wallH - t.h);
+  if (t.toNextFloor) it.h = state.wallH + SLAB; // stairs reach the floor above
   const p = at || defaultSpot();
   if (t.opening) {
     const s = Plan.wallSlot(state, [p.x, p.z], it.w);
@@ -2261,6 +2481,20 @@ function renderPlanTab() {
       </div>
     </div>
     <div class="block">
+      <h4>Piani <small>${state.floors.length > 1 ? `stai modificando: ${esc(state.floors[state.floor].name)}` : 'casa su un piano'}</small></h4>
+      <ul class="rows floors">${state.floors.map((f, i) => `
+        <li class="${i === state.floor ? 'on' : ''}" data-floor="${i}">
+          <i class="floor-num">${i}</i>
+          <input type="text" data-floorname="${i}" value="${esc(f.name)}" aria-label="Nome del piano">
+          ${state.floors.length > 1 ? `<button class="x" data-delfloor="${i}" title="Elimina il piano">×</button>` : ''}
+        </li>`).reverse().join('')}</ul>
+      <div class="row floor-add">
+        <button data-addfloor="copy" title="Nuovo piano in cima con gli stessi muri e finestre di quello sotto">+ Piano sopra (copia muri)</button>
+        <button data-addfloor="empty" title="Nuovo piano in cima, vuoto">+ Piano vuoto</button>
+      </div>
+      <p class="hint">Per la scala: metti una <b>Scala</b> al piano di sotto e, al piano di sopra, chiudi il buco con una <b>ringhiera</b>: diventa un vano scala aperto.</p>
+    </div>
+    <div class="block">
       <h4>Stanze <small>${rooms.length} · ${m2(total)} m²${outside ? ` + ${m2(outside)} m² esterni` : ''}</small></h4>
       ${rooms.length ? `<ul class="rows">${rooms.map(r => `
         <li data-select="${r.id}" class="${selection?.id === r.id ? 'on' : ''}">
@@ -2292,6 +2526,12 @@ $('#tab-plan').addEventListener('click', e => {
   if (li) { setTool('select'); select({ kind: 'room', id: li.dataset.select }); return; }
   const tb = e.target.closest('[data-tool]');
   if (tb) { setTool(tool === tb.dataset.tool ? 'select' : tb.dataset.tool); renderPlanTab(); return; }
+  const del = e.target.closest('[data-delfloor]');
+  if (del) { deleteFloor(+del.dataset.delfloor); return; }
+  const add = e.target.closest('[data-addfloor]');
+  if (add) { addFloor(add.dataset.addfloor === 'copy'); return; }
+  const fl = e.target.closest('[data-floor]');
+  if (fl && !e.target.closest('input')) { switchFloor(+fl.dataset.floor); return; }
   if (e.target.closest('[data-act=wizard]')) wizard.open();
   if (e.target.closest('[data-act=backup]') && confirm('Tornare al progetto com’era quando hai aperto la pagina? Puoi annullare con Ctrl+Z.')) {
     const b = loadBackup();
@@ -2307,7 +2547,21 @@ $('#tab-plan').addEventListener('click', e => {
     if (confirm(`Caricare "${preset.name}"? Il progetto attuale verrà sostituito (puoi annullare con Ctrl+Z).`)) startProject(preset.data, false);
   }
 });
+$('#floorSel').addEventListener('change', e => {
+  const v = e.target.value;
+  if (v === 'add') { renderFloorSelect(); addFloor(true); return; }
+  switchFloor(+v);
+});
+
 $('#tab-plan').addEventListener('change', e => {
+  if (e.target.dataset.floorname != null) {
+    const f = state.floors[+e.target.dataset.floorname];
+    f.name = e.target.value.trim() || floorName(+e.target.dataset.floorname);
+    commit();
+    renderFloorSelect();
+    renderPlanTab();
+    return;
+  }
   const k = e.target.dataset.k;
   const v = parseFloat(e.target.value);
   if (!k || !isFinite(v)) return;
@@ -2319,6 +2573,8 @@ $('#tab-plan').addEventListener('change', e => {
   }
   if (k === 'wallT') state.wallT = Math.min(60, Math.max(2, v));
   if (k === 'snap') state.snap = Math.min(50, Math.max(1, v));
+  rebuildOtherFloors(); // storeys move with the wall height
+  placeActiveFloor();
   rebuildItems();
   rebuildGeometry();
   commit();
@@ -2533,4 +2789,5 @@ renderer.setAnimationLoop(() => {
 window.planner = {
   get state() { return state; }, get rooms() { return rooms; }, get camera() { return camera; }, get controls() { return controls; }, scene, walker,
   select, addItem, setView, setTab, setTool, undo, wizard, startProject, findConflicts, walkColliders,
+  switchFloor, addFloor, deleteFloor, floorRooms,
 };
