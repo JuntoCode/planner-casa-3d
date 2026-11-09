@@ -476,11 +476,13 @@ function mulberry(a) {
 Object.assign(B, decorBuilders({ box, cyl, mat, shade, mulberry, def: it => TYPES[it.type], DARK, WHITE, METAL, GLASS }));
 
 // Defaults in cm. `elev` = height from the floor; `opening` = cut into a wall.
-// `wallMount` = hangs on a wall (turns its back to it); with `railMount` it hangs on a railing instead,
-// its rim (40% of its height) level with the rail top; `ceiling` = hangs from the ceiling;
+// `wallMount` = hangs on a wall (turns its back to it); with `railMount` (a share of its height) it hangs
+// on a railing instead, that height level with the rail top; `ceiling` = hangs from the ceiling;
 // `surface` = has a top to put things on (true: at its height, or a number in cm);
 // `onTop` = small piece that lands on the furniture under it;
 // `cutByOpenings` = wall covering with holes for doors and windows; `overOpenings` = goes over a window (curtains);
+// `aroundOpenings` = frames a door (an arch): you walk through it, so it never covers the opening;
+// `shelves` = lower shelves (cm from the bottom) that pieces can also stand on;
 // `outdoor` = may stand outside the rooms; `hit` = share of the footprint that blocks
 // walking (trunks, poles) or 'posts' (only the four corners).
 export const CATALOG = [
@@ -541,7 +543,7 @@ export const CATALOG = [
   { cat: 'Ingresso', items: [
     { type: 'shoeCabinet', name: 'Scarpiera', build: 'shoeCabinet', w: 80, d: 26, h: 110, color: '#f2f0eb', surface: true },
     { type: 'entryBench', name: 'Panca portascarpe', build: 'entryBench', w: 100, d: 35, h: 48, color: 'wood:oak', surface: true },
-    { type: 'consoleTable', name: 'Consolle', build: 'consoleTable', w: 110, d: 35, h: 80, color: 'wood:walnut', surface: true },
+    { type: 'consoleTable', name: 'Consolle', build: 'consoleTable', w: 110, d: 35, h: 80, color: 'wood:walnut', surface: true, shelves: [20] },
     { type: 'coatRack', name: 'Appendiabiti a muro', build: 'coatRack', w: 80, d: 30, h: 30, elev: 160, color: 'wood:oak', wallMount: true, noCollide: true },
     { type: 'coatStand', name: 'Appendiabiti a stelo', build: 'coatStand', w: 45, d: 45, h: 180, color: '#2b2b2b' },
     { type: 'umbrellaStand', name: 'Portaombrelli', build: 'umbrellaStand', w: 25, d: 25, h: 50, color: '#5b5f63' },
@@ -555,6 +557,7 @@ export const CATALOG = [
     { type: 'speaker', name: 'Cassa audio', build: 'speaker', w: 18, d: 18, h: 30, color: '#3b3f45', onTop: true, prefers: ['tvStand', 'tvUnit', 'sideboard', 'bookshelf'] },
     { type: 'recordPlayer', name: 'Giradischi', build: 'recordPlayer', w: 45, d: 35, h: 13, color: 'wood:walnut', onTop: true, prefers: ['sideboard', 'tvStand', 'cubeShelf'] },
     { type: 'microwave', name: 'Microonde', build: 'microwave', w: 50, d: 38, h: 30, color: '#2b2b2b', onTop: true, prefers: ['kitchenBase'] },
+    { type: 'keyBowl', name: 'Svuotatasche (ciotola per chiavi)', build: 'keyBowl', w: 22, d: 22, h: 7, color: '#c9a57a', onTop: true, prefers: ['consoleTable', 'shoeCabinet', 'sideboard'] },
     { type: 'coffeeMachine', name: 'Macchina del caffè', build: 'coffeeMachine', w: 25, d: 35, h: 35, color: '#c0c4c6', onTop: true, prefers: ['kitchenBase'] },
   ] },
   { cat: 'Pranzo', items: [
@@ -697,6 +700,8 @@ export const CATALOG = [
     { type: 'oliveIndoor', name: 'Ulivo in vaso', build: 'indoorTree', leaf: 'olive', w: 70, d: 70, h: 170, color: '#e9e1d3' },
     { type: 'fern', name: 'Felce', build: 'fern', w: 60, d: 60, h: 65, color: '#5b5f63' },
     { type: 'cactus', name: 'Cactus', build: 'cactus', w: 35, d: 35, h: 90, color: '#c56b45' },
+    { type: 'basilPot', name: 'Basilico in vaso', build: 'basilPot', w: 22, d: 22, h: 30, color: '#b5674a', onTop: true, prefers: ['kitchenBase', 'railBar', 'sideTable'] },
+    { type: 'rosemaryPot', name: 'Rosmarino in vaso', build: 'rosemaryPot', w: 26, d: 26, h: 45, color: '#b5674a', onTop: true, prefers: ['railBar', 'kitchenBase', 'sideTable'] },
     { type: 'succulents', name: 'Piante grasse', build: 'succulents', w: 30, d: 30, h: 15, elev: 75, color: '#e9e1d3', onTop: true, prefers: ['desk', 'bookshelf', 'sideboard', 'coffeeTable'] },
     { type: 'bonsai', name: 'Bonsai', build: 'bonsai', w: 35, d: 25, h: 35, elev: 75, color: '#3b3f45', onTop: true, prefers: ['desk', 'sideboard', 'consoleTable'] },
     { type: 'hangingPlant', name: 'Pianta pendente', build: 'hangingPlant', w: 45, d: 45, h: 110, color: '#f2f0eb', ceiling: true },
@@ -727,8 +732,13 @@ export const CATALOG = [
     { type: 'bush', name: 'Cespuglio', build: 'bush', w: 90, d: 90, h: 80, color: '#4f7f3f', outdoor: true },
     { type: 'lavender', name: 'Lavanda in fioriera', build: 'lavender', w: 100, d: 40, h: 60, color: '#b5674a', outdoor: true },
     { type: 'wallPlanter', name: 'Fioriera da muro', build: 'wallPlanter', w: 45, d: 20, h: 45, elev: 110, color: '#b5674a', wallMount: true, outdoor: true },
-    { type: 'railPlanter', name: 'Fioriera da ringhiera', build: 'railPlanter', w: 60, d: 22, h: 45, elev: 60, color: '#b5674a', wallMount: true, railMount: true, outdoor: true },
+    { type: 'railPlanter', name: 'Fioriera da ringhiera', build: 'railPlanter', w: 60, d: 22, h: 45, elev: 60, color: '#b5674a', wallMount: true, railMount: 0.4, outdoor: true },
+    { type: 'herbRailPlanter', name: 'Aromatiche da ringhiera', build: 'railPlanter', mode: 'herbs', w: 60, d: 22, h: 40, elev: 64, color: '#b5674a', wallMount: true, railMount: 0.4, outdoor: true },
+    { type: 'railBar', name: 'Piano bar da ringhiera', build: 'railBar', w: 120, d: 32, h: 25, elev: 80, color: 'wood:oak', wallMount: true, railMount: 0.8, outdoor: true, surface: true },
     { type: 'outdoorWallLamp', name: 'Applique da esterno', build: 'outdoorWallLamp', w: 18, d: 22, h: 32, elev: 190, color: '#2b2b2b', wallMount: true, outdoor: true },
+    { type: 'wallArch', name: 'Arco rampicante attorno alla porta', build: 'wallArch', w: 170, d: 35, h: 262, color: 'wood:oak', wallMount: true, aroundOpenings: true, outdoor: true, hit: 'posts' },
+    { type: 'wallPergola', name: 'Pergolina a sbalzo con glicine', build: 'wallPergola', w: 300, d: 80, h: 55, elev: 212, color: 'wood:oak', wallMount: true, outdoor: true },
+    { type: 'climberTrellis', name: 'Grigliato con rampicante', build: 'climberTrellis', w: 60, d: 30, h: 210, color: '#8e5fc0', wallMount: true, outdoor: true },
     { type: 'flowerBed', name: 'Aiuola fiorita', build: 'flowerBed', w: 200, d: 70, h: 30, color: '#b5674a', outdoor: true },
     { type: 'raisedBed', name: 'Orto rialzato', build: 'raisedBed', w: 120, d: 80, h: 45, color: 'wood:oak', outdoor: true },
     { type: 'gardenTable', name: 'Tavolo da giardino', build: 'table', w: 160, d: 90, h: 75, color: '#5b5f63', outdoor: true, openBelow: true, surface: true },

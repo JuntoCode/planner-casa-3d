@@ -251,6 +251,7 @@ body.walk-locked #scene { cursor: none; }
 }
 .tools button i { font-style: normal; font-size: 17px; line-height: 1.1; color: var(--text); }
 .tools button.on { background: var(--accent); color: #fff; }
+.level-row button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .tools button.on i { color: #fff; }
 .tools button:hover:not(.on) { background: var(--bg) !important; }
 .draw-hint {

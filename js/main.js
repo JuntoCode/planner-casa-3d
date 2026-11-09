@@ -782,7 +782,7 @@ function openingsBehind(it) {
 // A painting, TV or shelf hanging over a window or a door: the opening wins.
 const coversOpening = it => {
   const t = TYPES[it.type];
-  return t.wallMount && !t.cutByOpenings && !t.overOpenings && openingsBehind(it).length > 0;
+  return t.wallMount && !t.cutByOpenings && !t.overOpenings && !t.aroundOpenings && openingsBehind(it).length > 0;
 };
 
 // Curtains and blinds go on the window closest to p, in the same room, sized to it.
@@ -1525,6 +1525,12 @@ function surfaceTop(o) {
   if (s == null || s === false) return null;
   return o.elev + (s === true ? o.h : s);
 }
+// Every height things can stand on: the top first, then lower shelves (`shelves`, cm from the bottom).
+function surfaceLevels(o) {
+  const top = surfaceTop(o);
+  return top == null ? [] : [top, ...(TYPES[o.type].shelves || []).map(s => o.elev + s)];
+}
+const onLevel = (o, y) => surfaceLevels(o).some(l => Math.abs(l - y) < 1);
 
 function insideItem(o, x, z) {
   const th = THREE.MathUtils.degToRad(o.rot), c = Math.cos(th), sn = Math.sin(th);
@@ -1536,8 +1542,10 @@ function supportUnder(it, x, z) {
   let best = null;
   for (const o of state.items) {
     if (o.id === it.id || TYPES[o.type].onTop) continue;
-    const top = surfaceTop(o);
-    if (top == null || !insideItem(o, x, z)) continue;
+    const levels = surfaceLevels(o);
+    if (!levels.length || !insideItem(o, x, z)) continue;
+    // A piece on a lower shelf stays on it while it moves along that shelf.
+    const top = levels.find(l => l !== levels[0] && Math.abs(l - it.elev) < 1) ?? levels[0];
     if (!best || top > best.top) best = { item: o, top };
   }
   return best;
@@ -1577,7 +1585,7 @@ function restOnSurface(it, p) {
   return false;
 }
 
-const restsOn = (a, b) => TYPES[a.type].onTop && surfaceTop(b) != null && Math.abs(a.elev - surfaceTop(b)) < 1 && insideItem(b, a.x, a.z);
+const restsOn = (a, b) => TYPES[a.type].onTop && onLevel(b, a.elev) && insideItem(b, a.x, a.z);
 
 // How far `it` reaches past the edges of the top of `o` (cm, 0 = fully on it), and where its
 // centre must go to stand fully on it (centred on an axis where it is wider than the top).
@@ -1597,7 +1605,7 @@ const supportOf = it => (TYPES[it.type].onTop && it.elev > 0 ? state.items.find(
 
 // Is the whole footprint of `it` on tops at its height? Kitchen bases side by side make one worktop.
 function fullyOnTops(it) {
-  const tops = state.items.filter(o => o.id !== it.id && !TYPES[o.type].onTop && surfaceTop(o) != null && Math.abs(surfaceTop(o) - it.elev) < 1);
+  const tops = state.items.filter(o => o.id !== it.id && !TYPES[o.type].onTop && onLevel(o, it.elev));
   const th = THREE.MathUtils.degToRad(it.rot), c = Math.cos(th), s = Math.sin(th);
   const nu = Math.ceil(it.w / 10), nv = Math.ceil(it.d / 10);
   for (let i = 0; i <= nu; i++) {
@@ -1617,27 +1625,26 @@ function fitOnSupport(it, o = supportOf(it)) {
   if (f.out > 0.5) { it.x = Math.round(f.x * 10) / 10; it.z = Math.round(f.z * 10) / 10; }
 }
 
-// After a piece of furniture turned, grew or moved up, what stood on it follows.
+// After a piece of furniture turned, grew or moved up, what stood on it follows
+// (what was on a lower shelf stays on that shelf).
 function carryRiders(o, riders, before) {
-  const top = surfaceTop(o);
+  const top = surfaceTop(o), shelves = TYPES[o.type].shelves || [];
   const turn = THREE.MathUtils.degToRad(o.rot - before.rot), c = Math.cos(turn), s = Math.sin(turn);
   for (const q of riders) {
     const dx = q.x - before.x, dz = q.z - before.z;
     q.x = o.x + c * dx + s * dz;
     q.z = o.z - s * dx + c * dz;
     q.rot = (((q.rot + o.rot - before.rot) % 360) + 360) % 360;
-    if (top != null) q.elev = top;
+    const shelf = shelves.find(s => Math.abs(q.elev - (before.elev + s)) < 1);
+    if (shelf != null) q.elev = o.elev + shelf;
+    else if (top != null) q.elev = top;
     fitOnSupport(q, o);
     placeObj(itemObjs.get(q.id), q);
   }
 }
 
 // Pieces standing on `o` (moved along with it).
-const ridersOf = o => {
-  const top = surfaceTop(o);
-  if (top == null) return [];
-  return state.items.filter(q => q.id !== o.id && TYPES[q.type].onTop && Math.abs(q.elev - top) < 1 && insideItem(o, q.x, q.z));
-};
+const ridersOf = o => state.items.filter(q => q.id !== o.id && TYPES[q.type].onTop && onLevel(o, q.elev) && insideItem(o, q.x, q.z));
 
 // Hang a wall piece (painting, shelf, TV…) on the closest straight wall within `maxDist`:
 // back against the wall face on the side of (x, z). Returns false if no wall is close.
@@ -1656,7 +1663,7 @@ function wallFaces(x, z, maxDist, minLen, kind = 'wall') {
   }
   return out.sort((a, b) => a.dist - b.dist);
 }
-// Railing planters hang on railings, every other wall piece on walls.
+// Railing pieces (planters, bar shelf) hang on railings, every other wall piece on walls.
 const facesFor = (it, x, z, maxDist) => wallFaces(x, z, maxDist, it.w, TYPES[it.type].railMount ? 'railing' : 'wall');
 
 // Put a wall piece `u` cm along a wall face, its back on the wall and its front (+z) facing out.
@@ -1666,7 +1673,7 @@ function hangOn(it, f, u) {
   it.x = Math.round(p[0] * 10) / 10;
   it.z = Math.round(p[1] * 10) / 10;
   it.rot = ((Math.round(THREE.MathUtils.radToDeg(Math.atan2(f.n[0], f.n[1]))) % 360) + 360) % 360;
-  if (TYPES[it.type].railMount) it.elev = Math.max(0, Math.round(f.top - it.h * 0.4));
+  if (TYPES[it.type].railMount) it.elev = Math.max(0, Math.round(f.top - it.h * TYPES[it.type].railMount));
 }
 
 function mountOnWall(it, x, z, maxDist) {
@@ -2325,7 +2332,7 @@ function rotateSelection(delta) {
   const it = getItem(selection.id);
   if (isOpening(it)) { it.flip = !it.flip; Plan.syncOpenings(state); }
   else {
-    const riders = ridersOf(it), before = { x: it.x, z: it.z, rot: it.rot };
+    const riders = ridersOf(it), before = { x: it.x, z: it.z, rot: it.rot, elev: it.elev };
     it.rot = (((it.rot + delta) % 360) + 360) % 360;
     fitOnSupport(it);
     carryRiders(it, riders, before);
@@ -2503,6 +2510,11 @@ function renderProps() {
     const it = getItem(selection.id);
     if (!it) { el.hidden = true; return; }
     const t = TYPES[it.type];
+    // On furniture with more than one shelf: choose which one it stands on.
+    const sup = supportOf(it), levels = sup ? surfaceLevels(sup) : [];
+    const levelRow = levels.length < 2 ? '' : `<div class="field"><span>Appoggiato su</span><div class="row level-row">
+      ${levels.map((l, i) => `<button data-act="level" data-level="${l}" class="${Math.abs(l - it.elev) < 1 ? 'on' : ''}">${i ? (levels.length > 2 ? `Ripiano ${i}` : 'Ripiano basso') : 'Piano sopra'}</button>`).join('')}
+    </div></div>`;
     el.innerHTML = `
       <div class="props-head">
         <img data-thumb="${it.type}" src="${THUMBS[it.type] || ''}" alt="">
@@ -2517,6 +2529,7 @@ function renderProps() {
         ${isDoor(it) ? '' : numField('elev', 'Da terra', it.elev)}
         ${t.opening ? numField('t', 'Dall\'angolo', it.t - it.w / 2) : numField('x', 'Posizione X', it.x) + numField('z', 'Posizione Z', it.z)}
       </div>
+      ${levelRow}
       ${t.opening
         ? `<div class="field"><span>Verso</span><div class="row"><button data-rot="180">⇄ Inverti apertura</button></div></div>`
         : `<div class="field"><span>Rotazione</span><div class="row rot">
@@ -2640,7 +2653,7 @@ function applyProp(k, raw, live = false) {
       if (['w', 'd', 'h'].includes(k)) v = Math.min(2000, Math.max(1, v));
       if (k === 'elev') v = Math.max(0, v);
       if (k === 'rot') v = ((v % 360) + 360) % 360;
-      const riders = isOpening(it) ? [] : ridersOf(it), before = { x: it.x, z: it.z, rot: it.rot };
+      const riders = isOpening(it) ? [] : ridersOf(it), before = { x: it.x, z: it.z, rot: it.rot, elev: it.elev };
       if (k === 't') { it.t = v + it.w / 2; } else it[k] = v;
       if (isOpening(it)) Plan.syncOpenings(state);
       else { fitOnSupport(it); carryRiders(it, riders, before); }
@@ -2727,6 +2740,15 @@ $('#props').addEventListener('click', e => {
   } else if (b.dataset.act === 'close') select(null);
   else if (b.dataset.act === 'del') deleteSelection();
   else if (b.dataset.act === 'dup') duplicateSelection();
+  else if (b.dataset.act === 'level') {
+    const it = getItem(selection.id);
+    it.elev = parseFloat(b.dataset.level);
+    fitOnSupport(it);
+    refreshItem(it);
+    updateOverlay();
+    commit();
+    renderProps();
+  }
   else if (b.dataset.act === 'reseed') {
     const it = getItem(selection.id);
     it.seed = (it.seed ?? Math.floor(Math.random() * 8)) + 1;

@@ -71,6 +71,47 @@ export function decorBuilders({ box, cyl, mat, shade, mulberry, def, DARK, WHITE
     cyl(g, w * 0.46, w * 0.46, 0.01, '#4a3a2c', 0, h - 0.012, 0);
   };
   const GREEN = ['#3d6b34', '#4f7f3f', '#5f8f4a', '#2f5a2c'];
+  // Basil standing at (x, y, z), `s` tall: soft stems with pairs of glossy cupped leaves, a tuft on top.
+  function basilPlant(g, r, x, y, z, s) {
+    const cols = ['#4f9a36', '#5fae3f', '#56a33a'];
+    const stems = 4 + Math.floor(r() * 3);
+    for (let k = 0; k < stems; k++) {
+      const a = (k / stems) * Math.PI * 2 + r() * 0.6, len = s * (0.75 + r() * 0.25), lean = 0.15 + r() * 0.2;
+      const tip = [x + Math.cos(a) * lean * len, y + len, z + Math.sin(a) * lean * len];
+      tube(g, [[x, y, z], [x + (tip[0] - x) * 0.4, y + len * 0.5, z + (tip[2] - z) * 0.4], tip], 0.0025, '#6f9a4a');
+      for (let n = 1; n <= 3; n++) {
+        const t = n / 3.6, size = s * (0.32 - t * 0.12);
+        const px = x + (tip[0] - x) * t, py = y + len * t, pz = z + (tip[2] - z) * t;
+        for (const side of [0, Math.PI]) leaf(g, px, py, pz, size, size * 0.62, a + side + n * 1.57, 1.05 + r() * 0.25, cols[(k + n) % 3]);
+      }
+      for (let n = 0; n < 4; n++) leaf(g, tip[0], tip[1], tip[2], s * 0.13, s * 0.08, a + n * 1.57, 0.5, cols[n % 3]);
+    }
+  }
+  // Rosemary standing at (x, y, z), `s` tall: upright woody stems thick with short needles,
+  // a few pale blue flowers. The needles are one instanced mesh.
+  const needleGeo = new THREE.CylinderGeometry(0.0022, 0.0032, 1, 4);
+  function rosemaryPlant(g, r, x, y, z, s) {
+    const stems = 9 + Math.floor(r() * 4), per = 42;
+    const needles = new THREE.InstancedMesh(needleGeo, mat('#47684c', { roughness: 1 }), stems * per);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), p = new THREE.Vector3();
+    let i = 0;
+    for (let k = 0; k < stems; k++) {
+      const a = (k / stems) * Math.PI * 2 + r() * 0.5, lean = 0.1 + r() * 0.3, len = s * (0.55 + r() * 0.45);
+      const dx = Math.cos(a) * lean, dz = Math.sin(a) * lean;
+      tube(g, [[x, y, z], [x + dx * len * 0.5, y + len * 0.5, z + dz * len * 0.5], [x + dx * len, y + len, z + dz * len]], 0.0028, '#6b5a45');
+      for (let n = 0; n < per; n++) {
+        const t = 0.12 + (n / per) * 0.88;
+        p.set(x + dx * len * t, y + len * t, z + dz * len * t);
+        // tilted away from the stem (more upright near the tip), turned all around it
+        q.setFromEuler(e.set(0.5 + r() * 0.7 - t * 0.3, r() * Math.PI * 2, 0, 'YXZ'));
+        m4.compose(p, q, sc.set(1, s * (0.1 + r() * 0.05), 1));
+        needles.setMatrixAt(i++, m4);
+      }
+      if (r() < 0.45) ball(g, 0.005, '#8fa0e0', x + dx * len * 0.85, y + len * 0.85, z + dz * len * 0.85, { roughness: 0.9 });
+    }
+    needles.castShadow = needles.receiveShadow = true;
+    g.add(needles);
+  }
   // Geraniums and petunias in a trough whose soil is at height y: a flowering mound,
   // and stems falling over the front edge by up to `drop`.
   function troughFlowers(g, r, w, d, y, zc, drop) {
@@ -1448,18 +1489,149 @@ export function decorBuilders({ box, cyl, mat, shade, mulberry, def, DARK, WHITE
       box(g, w - 0.03, 0.01, d - 0.04, '#4a3a2c', 0, y0 + th - 0.012, zc);
       troughFlowers(g, r, w, d - 0.012, y0 + th, zc, y0 + th - 0.03);
     },
-    // Railing planter: hooked over the top rail with its back on the railing.
-    // The rim is at 40% of the height: main.js hangs it with the rim level with the rail top.
+    // Railing planter: hooked over the top rail with its back on the railing; the rim is
+    // at `railMount` of the height, which main.js puts level with the rail top.
+    // mode 'herbs': basil and rosemary instead of flowers.
     railPlanter(g, w, d, h, c, it) {
       const r = mulberry(seedOf(it));
-      const th = h * 0.4, back = -d / 2, zc = back + 0.005 + (d - 0.01) / 2;
+      const th = h * (def(it).railMount || 0.4), back = -d / 2, zc = back + 0.005 + (d - 0.01) / 2;
       box(g, w, th, d - 0.01, c, 0, 0, zc);
       box(g, w - 0.03, 0.01, d - 0.04, '#4a3a2c', 0, th - 0.012, zc);
       for (const sx of [-1, 1]) {
         const x = sx * w * 0.3;
         tube(g, [[x, th * 0.5, back + 0.004], [x, th + 0.035, back + 0.002], [x, th + 0.04, back - 0.035], [x, th, back - 0.065]], 0.005, '#3b3f45', METAL);
       }
-      troughFlowers(g, r, w, d - 0.01, th, zc, th * 0.9);
+      if (def(it).mode !== 'herbs') { troughFlowers(g, r, w, d - 0.01, th, zc, th * 0.9); return; }
+      const s = Math.max(0.1, h - th - 0.02);
+      basilPlant(g, r, -w * 0.3, th - 0.01, zc, s * 0.8);
+      basilPlant(g, r, -w * 0.06, th - 0.01, zc, s * 0.72);
+      rosemaryPlant(g, r, w * 0.26, th - 0.01, zc, s);
+    },
+    basilPot(g, w, d, h, c, it) {
+      const ph = h * 0.38;
+      pot(g, w * 0.85, ph, c);
+      basilPlant(g, mulberry(seedOf(it)), 0, ph - 0.01, 0, h - ph);
+    },
+    rosemaryPot(g, w, d, h, c, it) {
+      const ph = h * 0.3;
+      pot(g, w * 0.85, ph, c);
+      rosemaryPlant(g, mulberry(seedOf(it)), 0, ph - 0.01, 0, h - ph);
+    },
+    // Key bowl for the hall: a shallow bowl with a bunch of keys in it.
+    keyBowl(g, w, d, h, c) {
+      const r0 = Math.min(w, d) / 2;
+      cyl(g, r0 * 0.55, r0 * 0.55, 0.004, c, 0, 0, 0);
+      add(g, new THREE.LatheGeometry(profile(8, h, t => r0 * (0.55 + 0.45 * Math.sin((t * Math.PI) / 2))), 32), mat(c, { side: THREE.DoubleSide, roughness: 0.5 }));
+      const ring = add(g, new THREE.TorusGeometry(0.018, 0.0035, 6, 16), mat('#c0c4c6', METAL), -0.015, 0.012, 0);
+      ring.rotation.x = Math.PI / 2;
+      for (const [a, len, col] of [[0.4, 0.055, '#c0c4c6'], [1.3, 0.05, '#d8dbdd'], [2.3, 0.045, '#c9a24a']]) {
+        const k = box(g, 0.017, 0.004, len, col, -0.015 + Math.cos(a) * (0.018 + len / 2), 0.01, Math.sin(a) * (0.018 + len / 2), METAL);
+        k.rotation.y = Math.PI / 2 - a;
+      }
+    },
+    // Garden arch fixed to the wall around a door: two lattice sides and a round top, with a
+    // wisteria climbing it and its lilac bunches hanging over the way in.
+    wallArch(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      const p = 0.06, xp = w / 2 - p / 2, zp = d / 2 - p / 2, R = xp, ys = h - R - p / 2;
+      for (const sx of [-1, 1]) {
+        for (const sz of [-1, 1]) box(g, p, ys, p, c, sx * xp, 0, sz * zp);
+        for (let y = 0.3; y < ys; y += 0.25) box(g, 0.025, 0.025, d - 2 * p, c, sx * xp, y, 0);
+      }
+      const N = 14, arcAt = (k, z) => [Math.cos((k / N) * Math.PI) * R, ys + Math.sin((k / N) * Math.PI) * R, z];
+      for (const sz of [-1, 1]) tube(g, Array.from({ length: N + 1 }, (_, k) => arcAt(k, sz * zp)), p / 2, c);
+      for (let k = 1; k < N; k++) { const [x, y] = arcAt(k, 0); box(g, 0.025, 0.025, d - 2 * p, c, x, y - 0.0125, 0); }
+      // the climber: up both sides, then along the top
+      const lilac = ['#9b7fc4', '#b49ad8', '#8462b0', '#c3afe3'], cone = new THREE.ConeGeometry(0.03, 1, 7);
+      for (const sx of [-1, 1]) {
+        const pts = [];
+        for (let y = 0.05; y < ys; y += 0.18) pts.push([sx * xp + (r() - 0.5) * 0.06, y, (r() - 0.5) * zp]);
+        tube(g, pts, 0.008, '#6b5a45');
+        for (const [x, y, z] of pts.slice(2)) {
+          for (let k = 0; k < 2; k++) blob(g, 0.04 + r() * 0.02, GREEN[k % 4], x + (r() - 0.5) * 0.08, y + (r() - 0.5) * 0.1, z + (r() - 0.5) * d * 0.5);
+          if (r() < 0.4) ball(g, 0.02, lilac[Math.floor(r() * 4)], x + (r() - 0.5) * 0.08, y, z + (r() - 0.5) * d * 0.5, { roughness: 0.9 });
+        }
+      }
+      for (let k = 0; k <= N; k++) {
+        for (let j = 0; j < 2; j++) {
+          const [x, y, z] = arcAt(k + (r() - 0.5) * 0.6, (r() - 0.5) * d * 0.9);
+          blob(g, 0.06 + r() * 0.025, GREEN[(k + j) % 4], x, y + 0.02, z);
+          if (k < 2 || k > N - 2) continue;
+          const len = 0.12 + r() * 0.13, o = add(g, cone, mat(lilac[(k + j) % 4], { roughness: 0.9 }), x, y - 0.03 - len / 2, z);
+          o.scale.y = len;
+          o.rotation.x = Math.PI; // point down
+        }
+      }
+    },
+    // Railing bar: a wooden shelf resting on the top rail (its lip over the rail, at
+    // `railMount` of the height) with two brackets underneath, for coffee or a drink outside.
+    railBar(g, w, d, h, c, it) {
+      const back = -d / 2, rail = h * def(it).railMount;
+      box(g, w, 0.03, d, c, 0, h - 0.03, 0);
+      box(g, w, rail > 0.03 ? h - 0.03 - rail : 0.01, 0.06, c, 0, rail, back - 0.03);
+      for (const sx of [-1, 1]) {
+        const x = sx * (w / 2 - 0.08);
+        tube(g, [[x, 0.01, back + 0.01], [x, h * 0.55, back + d * 0.35], [x, h - 0.03, d / 2 - 0.04]], 0.01, '#3b3f45', METAL);
+        box(g, 0.04, h - 0.03, 0.012, '#3b3f45', x, 0, back + 0.006, METAL);
+      }
+    },
+    // Wall pergola: wooden rafters fixed to the wall that stick out a little, carried by
+    // arched brackets, with a wisteria on top and its lilac bunches hanging down. No posts.
+    wallPergola(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      const back = -d / 2, top = h - 0.02, rafterY = top - 0.12, beamY = rafterY - 0.1, beamZ = d / 2 - 0.12;
+      box(g, w, 0.14, 0.05, c, 0, rafterY - 0.02, back + 0.025);
+      const n = Math.max(3, Math.round(w / 0.4) + 1);
+      for (let k = 0; k < n; k++) box(g, 0.05, 0.12, d - 0.05, c, -w / 2 + 0.03 + (k * (w - 0.06)) / (n - 1), rafterY, 0.025);
+      box(g, w, 0.1, 0.06, c, 0, beamY, beamZ);
+      const yLow = Math.max(0.02, beamY - 0.4);
+      for (const x of w > 2 ? [-w / 2 + 0.06, 0, w / 2 - 0.06] : [-w / 2 + 0.06, w / 2 - 0.06]) {
+        const pts = [];
+        for (let k = 0; k <= 6; k++) {
+          const t = (k / 6) * Math.PI / 2;
+          pts.push([x, yLow + (beamY - yLow) * Math.sin(t), back + 0.03 + (beamZ - back - 0.03) * (1 - Math.cos(t))]);
+        }
+        tube(g, pts, 0.025, c);
+        box(g, 0.08, beamY - yLow + 0.04, 0.02, c, x, yLow - 0.02, back + 0.01);
+      }
+      for (let k = 0, m = Math.round(w * d * 45); k < m; k++) blob(g, 0.05 + r() * 0.03, GREEN[k % 4], (r() - 0.5) * w * 0.95, top - 0.03, (r() - 0.5) * d * 0.9);
+      const cone = new THREE.ConeGeometry(0.035, 1, 7), lilac = ['#9b7fc4', '#b49ad8', '#8462b0', '#c3afe3'];
+      for (let k = 0, m = Math.round(w * d * 40); k < m; k++) {
+        const len = 0.14 + r() * 0.16, x = (r() - 0.5) * w * 0.95, z = back + 0.1 + r() * (d - 0.12);
+        const o = add(g, cone, mat(lilac[k % 4], { roughness: 0.9 }), x, rafterY - len / 2, z);
+        o.scale.y = len;
+        o.rotation.x = Math.PI; // point down
+        if (k % 3 === 0) blob(g, 0.03, GREEN[k % 4], x + 0.03, rafterY - 0.01, z);
+      }
+    },
+    // Trellis with a climber: a planter on the ground, a wooden grid on the wall and a
+    // clematis climbing it, flowers in the piece's colour.
+    climberTrellis(g, w, d, h, c, it) {
+      const r = mulberry(seedOf(it));
+      const back = -d / 2, ph = Math.min(0.3, h * 0.2), gz = back + 0.012, wood = '#c9a57a';
+      box(g, w, ph, d - 0.01, '#b5674a', 0, 0, back + 0.005 + (d - 0.01) / 2);
+      box(g, w - 0.03, 0.01, d - 0.04, '#4a3a2c', 0, ph - 0.012, back + 0.005 + (d - 0.01) / 2);
+      for (let x = -w / 2 + 0.02; x <= w / 2 - 0.01; x += (w - 0.04) / Math.max(2, Math.round(w / 0.15))) box(g, 0.02, h - ph, 0.012, wood, x, ph, gz);
+      for (let y = ph + 0.1; y < h; y += 0.2) box(g, w, 0.02, 0.012, wood, 0, y, gz + 0.012);
+      const petal = new THREE.CircleGeometry(0.035, 6), fm = mat(c, { side: THREE.DoubleSide, roughness: 0.8 });
+      for (let s = 0; s < 3; s++) {
+        let x = (s - 1) * w * 0.28, y = ph;
+        const pts = [[x, ph - 0.02, gz + 0.06]];
+        while (y < h - 0.08) {
+          y += 0.12 + r() * 0.08;
+          x = Math.max(-w / 2 + 0.03, Math.min(w / 2 - 0.03, x + (r() - 0.5) * 0.14));
+          pts.push([x, Math.min(y, h - 0.04), gz + 0.035]);
+        }
+        tube(g, pts, 0.005, '#5b6b3a');
+        for (const [px, py, pz] of pts.slice(1)) {
+          for (let k = 0; k < 3; k++) blob(g, 0.03 + r() * 0.015, GREEN[k % 4], px + (r() - 0.5) * 0.12, py + (r() - 0.5) * 0.1, pz + 0.01);
+          if (r() < 0.75) {
+            const f = add(g, petal, fm, px + (r() - 0.5) * 0.1, py + (r() - 0.5) * 0.08, pz + 0.045);
+            f.castShadow = false;
+            ball(g, 0.009, '#f2e6a0', f.position.x, f.position.y, f.position.z + 0.005);
+          }
+        }
+      }
     },
     lavender(g, w, d, h, c, it) {
       const r = mulberry(seedOf(it));
@@ -1749,9 +1921,10 @@ export function decorBuilders({ box, cyl, mat, shade, mulberry, def, DARK, WHITE
         tube(g, [[Math.cos(a) * w * 0.4, 0, Math.sin(a) * d * 0.4], [Math.cos(a) * w * 0.25, h - 0.025, Math.sin(a) * d * 0.25]], 0.01, DARK, METAL);
       }
     },
-    consoleTable(g, w, d, h, c) {
+    // The lower shelf's top is at `shelves[0]` cm, where pieces can stand too.
+    consoleTable(g, w, d, h, c, it) {
       box(g, w, 0.03, d, c, 0, h - 0.03, 0);
-      box(g, w - 0.08, 0.02, d - 0.06, c, 0, 0.18, 0);
+      box(g, w - 0.08, 0.02, d - 0.06, c, 0, (def(it).shelves?.[0] ?? 20) / 100 - 0.02, 0);
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, 0.025, h - 0.03, 0.025, DARK, sx * (w / 2 - 0.03), 0, sz * (d / 2 - 0.03), METAL);
     },
     fireplace(g, w, d, h, c) {

@@ -35,7 +35,8 @@ senza build: HTML, CSS e JavaScript modules.
   - **scale**: dritta e a chiocciola;
   - **ufficio**: anche scrivania angolare, cassettiera con ruote, stampante, bacheca;
   - **ingresso**: scarpiera, panca portascarpe, consolle, appendiabiti a muro e a stelo, portaombrelli;
-  - **da appoggiare**: libri, candele, cornice, vaso, fruttiera, cassa audio, giradischi, microonde, macchina del caffè;
+  - **da appoggiare**: libri, candele, cornice, vaso, fruttiera, svuotatasche per le chiavi, cassa audio, giradischi,
+    microonde, macchina del caffè;
   - **decorazioni**: quadri, poster, arazzo mandala, acchiappasogni, specchi, orologio, mensola con libri, vaso di fiori;
   - **tappeti**: persiano, berbero, kilim, passatoia, rotondi;
   - **luci**: lampadario, sospensioni, plafoniera, luci fairy; da terra: classica, ad arco, treppiede, a luce
@@ -43,7 +44,8 @@ senza build: HTML, CSS e JavaScript modules.
     scrivania, snodata, a fungo, a sfera, con paralume plissé, lanterna; mistiche e tribali: lanterna marocchina,
     lampada di sale, lampada lava, geode di ametista, zucca intagliata, rattan, mandala, Tiffany,
     sfera di cristallo, totem tribale;
-  - **piante**: monstera, sansevieria, palma, ficus, ulivo, felce, cactus, piante grasse, bonsai, pianta pendente;
+  - **piante**: monstera, sansevieria, palma, ficus, ulivo, felce, cactus, piante grasse, bonsai, pianta pendente,
+    basilico e rosmarino in vaso;
   - **tecnologia e musica**: PC, portatile, TV a parete, chitarre a parete o su supporto, pianoforti, batteria;
   - **animali**: cucce per cane e gatto, ciotole, tiragraffi, lettiera, acquario;
   - **rivestimenti** a piastrelle per bagno e cucina.
@@ -51,15 +53,19 @@ senza build: HTML, CSS e JavaScript modules.
   Quadri, specchi e TV si appendono da soli al muro più vicino; i lampadari si agganciano al soffitto.
   PC, portatile, lampade, libri e gli altri oggetti piccoli si posano da soli sul mobile adatto (il PC sulla
   scrivania, il microonde in cucina) e salgono sul piano su cui li trascini (`Alt` per lasciarli a terra);
-  spostando un mobile si porta dietro quello che ha sopra. Un oggetto nuovo cerca un posto libero:
+  spostando un mobile si porta dietro quello che ha sopra. Sui mobili con un ripiano basso (la consolle) il pannello
+  dell'oggetto fa scegliere *Piano sopra* o *Ripiano basso*. Un oggetto nuovo cerca un posto libero:
   a terra vicino al centro della stanza, a parete un tratto di muro sgombro (non sopra la doccia).
   Dimensioni e colore modificabili, rotazione, aggancio alla griglia e ai muri.
 - **Giardino e patio**: lo strumento *Giardino* disegna una staccionata (o siepe) anche tutto intorno
   alla casa, *Patio* un cordolo per una zona pavimentata. In giardino: alberi, ulivo, cipresso,
   cespugli, aiuole, lavanda, orto, piscina, pergola, ombrellone, lettino, barbecue, panchina,
   lampione, casetta degli attrezzi, cuccia del cane, amaca, altalena, tappeto elastico, braciere, fontana, auto.
-  Sui muri esterni applique da esterno e fioriere da muro; la **fioriera da ringhiera** si aggancia da sola
-  alla ringhiera più vicina, con il bordo all'altezza del corrimano.
+  Sui muri esterni applique da esterno, fioriere da muro, **arco rampicante con glicine** attorno alla porta (ci si
+  passa sotto), **pergolina a sbalzo con glicine** (travetti e mensole ad arco fissati al muro, senza pali, da mettere
+  sopra la porta) e **grigliato con rampicante** in vaso.
+  Sulle ringhiere **fioriera**, **aromatiche** e **piano bar** si agganciano da soli alla ringhiera più vicina,
+  all'altezza del corrimano.
 - **Piani**: casa su più livelli. Dal menu in alto o dalla scheda *Pianta* scegli il piano da modificare,
   ne aggiungi uno sopra (vuoto o con gli stessi muri e finestre di quello sotto), lo rinomini o lo elimini.
   In 3D vedi i piani sotto quello che modifichi, con il solaio; in pianta il piano sotto resta velato come
