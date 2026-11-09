@@ -1238,6 +1238,11 @@ function solidSegments() {
 
 // Chairs (`tucks`) can slide under tables and desks (`openBelow`).
 const tucksUnder = (a, b) => TYPES[a.type].tucks && TYPES[b.type].openBelow;
+// A piece standing fully on a top, and a chair tucked under that same top.
+const onTopOver = (a, b) => {
+  const s = supportOf(a);
+  return !!s && tucksUnder(b, s) && fullyOnTops(a);
+};
 
 // The part of a piece that really takes room: a tree's trunk, a parasol's pole.
 function solidPart(it) {
@@ -1256,12 +1261,16 @@ function findConflicts() {
       if (A.elev >= B.elev + B.h || B.elev >= A.elev + A.h) continue;
       if (tucksUnder(A, B) || tucksUnder(B, A)) continue; // a chair pushed under a table is fine
       if (restsOn(A, B) || restsOn(B, A)) continue; // a lamp on the TV unit's low shelf
+      if (onTopOver(A, B) || onTopOver(B, A)) continue; // a laptop on the desk, the chair tucked under it
       if (overlap(polys[i], polys[j])) { bad.add(A.id); bad.add(B.id); }
     }
     const ok = polys[i].every(p => (TYPES[list[i].type].outdoor || rooms.some(r => G.inRoom(p[0], p[1], r))) && segs.every(([a, b, h]) => G.segDist(p, a, b).d >= h - 0.6));
     if (!ok) bad.add(list[i].id);
   }
-  for (const it of state.items) if (coversOpening(it)) bad.add(it.id);
+  for (const it of state.items) {
+    if (coversOpening(it)) bad.add(it.id);
+    if (supportOf(it) && !fullyOnTops(it)) bad.add(it.id); // hangs off the edge: too big for that top
+  }
   return bad;
 }
 
@@ -1561,6 +1570,59 @@ function restOnSurface(it, p) {
 
 const restsOn = (a, b) => TYPES[a.type].onTop && surfaceTop(b) != null && Math.abs(a.elev - surfaceTop(b)) < 1 && insideItem(b, a.x, a.z);
 
+// How far `it` reaches past the edges of the top of `o` (cm, 0 = fully on it), and where its
+// centre must go to stand fully on it (centred on an axis where it is wider than the top).
+function overhang(it, o) {
+  const th = THREE.MathUtils.degToRad(o.rot), ax = [Math.cos(th), -Math.sin(th)], az = [Math.sin(th), Math.cos(th)];
+  const rel = THREE.MathUtils.degToRad(it.rot - o.rot), c = Math.abs(Math.cos(rel)), s = Math.abs(Math.sin(rel));
+  const ex = (c * it.w + s * it.d) / 2, ez = (s * it.w + c * it.d) / 2; // half size along the top's axes
+  const dx = it.x - o.x, dz = it.z - o.z, u = dx * ax[0] + dz * ax[1], v = dx * az[0] + dz * az[1];
+  const clamp = (t, e, half) => (e >= half ? 0 : Math.max(e - half, Math.min(half - e, t)));
+  const cu = clamp(u, ex, o.w / 2), cv = clamp(v, ez, o.d / 2);
+  const out = Math.max(0, Math.abs(u) + ex - o.w / 2, Math.abs(v) + ez - o.d / 2);
+  return { out, x: o.x + ax[0] * cu + az[0] * cv, z: o.z + ax[1] * cu + az[1] * cv };
+}
+
+// The furniture a raised piece stands on (null on the floor).
+const supportOf = it => (TYPES[it.type].onTop && it.elev > 0 ? state.items.find(o => o.id !== it.id && !TYPES[o.type].onTop && restsOn(it, o)) : null);
+
+// Is the whole footprint of `it` on tops at its height? Kitchen bases side by side make one worktop.
+function fullyOnTops(it) {
+  const tops = state.items.filter(o => o.id !== it.id && !TYPES[o.type].onTop && surfaceTop(o) != null && Math.abs(surfaceTop(o) - it.elev) < 1);
+  const th = THREE.MathUtils.degToRad(it.rot), c = Math.cos(th), s = Math.sin(th);
+  const nu = Math.ceil(it.w / 10), nv = Math.ceil(it.d / 10);
+  for (let i = 0; i <= nu; i++) {
+    for (let j = 0; j <= nv; j++) {
+      const u = (i / nu - 0.5) * (it.w - 1), v = (j / nv - 0.5) * (it.d - 1);
+      const x = it.x + u * c + v * s, z = it.z - u * s + v * c;
+      if (!tops.some(o => insideItem(o, x, z))) return false;
+    }
+  }
+  return true;
+}
+
+// Slide a raised piece back fully onto its top: a laptop never hangs off the desk edge.
+function fitOnSupport(it, o = supportOf(it)) {
+  if (!o || fullyOnTops(it)) return;
+  const f = overhang(it, o);
+  if (f.out > 0.5) { it.x = Math.round(f.x * 10) / 10; it.z = Math.round(f.z * 10) / 10; }
+}
+
+// After a piece of furniture turned, grew or moved up, what stood on it follows.
+function carryRiders(o, riders, before) {
+  const top = surfaceTop(o);
+  const turn = THREE.MathUtils.degToRad(o.rot - before.rot), c = Math.cos(turn), s = Math.sin(turn);
+  for (const q of riders) {
+    const dx = q.x - before.x, dz = q.z - before.z;
+    q.x = o.x + c * dx + s * dz;
+    q.z = o.z - s * dx + c * dz;
+    q.rot = (((q.rot + o.rot - before.rot) % 360) + 360) % 360;
+    if (top != null) q.elev = top;
+    fitOnSupport(q, o);
+    placeObj(itemObjs.get(q.id), q);
+  }
+}
+
 // Pieces standing on `o` (moved along with it).
 const ridersOf = o => {
   const top = surfaceTop(o);
@@ -1808,7 +1870,11 @@ function dragItem(p, free) {
     }
     it.x = x; it.z = z;
     // Small pieces climb onto the furniture under them; Alt keeps them on the floor.
-    if (TYPES[it.type].onTop) it.elev = free ? 0 : supportUnder(it, x, z)?.top ?? 0;
+    if (TYPES[it.type].onTop) {
+      const sup = free ? null : supportUnder(it, x, z);
+      it.elev = sup?.top ?? 0;
+      if (sup) fitOnSupport(it, sup.item); // stays fully on the top while the pointer is over it
+    }
     placeObj(itemObjs.get(it.id), it);
     for (const r of drag.riders || []) {
       const q = getItem(r.id);
@@ -2167,7 +2233,12 @@ function rotateSelection(delta) {
   if (selection?.kind !== 'item') return;
   const it = getItem(selection.id);
   if (isOpening(it)) { it.flip = !it.flip; Plan.syncOpenings(state); }
-  else it.rot = (((it.rot + delta) % 360) + 360) % 360;
+  else {
+    const riders = ridersOf(it), before = { x: it.x, z: it.z, rot: it.rot };
+    it.rot = (((it.rot + delta) % 360) + 360) % 360;
+    fitOnSupport(it);
+    carryRiders(it, riders, before);
+  }
   placeObj(itemObjs.get(it.id), it);
   updateOverlay();
   renderProps();
@@ -2447,8 +2518,10 @@ function applyProp(k, raw, live = false) {
       if (['w', 'd', 'h'].includes(k)) v = Math.min(2000, Math.max(1, v));
       if (k === 'elev') v = Math.max(0, v);
       if (k === 'rot') v = ((v % 360) + 360) % 360;
+      const riders = isOpening(it) ? [] : ridersOf(it), before = { x: it.x, z: it.z, rot: it.rot };
       if (k === 't') { it.t = v + it.w / 2; } else it[k] = v;
       if (isOpening(it)) Plan.syncOpenings(state);
+      else { fitOnSupport(it); carryRiders(it, riders, before); }
     }
     refreshItem(it);
     if (!live) { commit(); renderProps(); renderList(); }
